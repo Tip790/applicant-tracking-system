@@ -28,6 +28,35 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-02 — Phase 2: job openings and skills
+
+### Prompts
+1. `/implement @prd/applicant-tracking-system.md  @plans/applicant-tracking-system.md  implement Phase 2`
+2. `where did you get the close and reopen work repeatedly and only accept POST tdd from?`
+3. `keep both, approved, go ahead, but add the new TDD test to the plan`
+4. `approved, go ahead`
+5. `continue`
+6. `approved, go ahead`
+7. `continue`
+8. `manual verification passed, go ahead`
+
+### Summary
+- **Outcome:** Phase 2 was built on top of Phase 1:
+  - `Skill` model with a database constraint that keeps names unique ignoring case. `JobOpening` model (title, department, location, description, open/closed status defaulting to open, skills, timestamps). Migration `0002`.
+  - Opening list, detail, create and edit pages using generic class-based views, plus an "Openings" link in the navbar. A shared `partials/opening_status_badge.html` shows Open/Closed badges.
+  - The opening form has a checkbox list of existing skills and an "Add a new skill" field. `rules.get_or_create_skill` reuses a skill whose name matches ignoring case and trims spaces.
+  - POST-only close and reopen views (`@require_POST`) that redirect back to the opening, with matching buttons on the detail page.
+  - Openings and skills are registered in admin. Skills have a "Merge selected skills into the oldest one" admin action for story 35.
+  - 38 tests pass. Two behaviors were built test-first, each through an approved RED → GREEN cycle: reusing a skill that differs only in case, and close/reopen working repeatedly and only on POST. Ordinary tests cover the skill constraint, opening create/edit/view/list, the badges and buttons, more skill cases, the merge action, and login on the new pages and POST actions.
+  - Ruff check and format are clean. The user confirmed manual verification in the browser.
+- **Deviations:**
+  - The user asked where the close/reopen TDD candidate came from. Claude pointed to the plan's Phase 2 criterion and admitted the plan didn't mark it "(test)". The user kept both behaviors and had "(test)" added to that criterion in the plan.
+  - The close/reopen test checks that a GET leaves the status unchanged instead of demanding a 405, because the plan has `/close/` show a confirmation page on GET in Phase 3.
+  - Claude made a few choices without asking: description is required, the skill-merge admin action was added, and editing an opening never changes its status.
+  - The user's own uncommitted edit to `CLAUDE.md`, made before the session, was left out of the Phase 2 commit.
+- **Sideways:**
+  - Nothing failed. Both RED runs failed on assertions as intended, and the full suite, Ruff, the migration check and the CSS build all passed the first time.
+
 ## 2026-11-02 — Phase 1: skeleton, login and candidates
 
 ### Prompts

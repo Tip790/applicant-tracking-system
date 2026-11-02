@@ -15,6 +15,7 @@
         <a href="{% url 'hiring:application_list' %}" class="btn btn-ghost text-lg">ATS</a>
         <a href="{% url 'hiring:application_list' %}" class="btn btn-ghost btn-sm">All Applications</a>
         <a href="{% url 'hiring:candidate_list' %}" class="btn btn-ghost btn-sm">Candidates</a>
+        <a href="{% url 'hiring:opening_list' %}" class="btn btn-ghost btn-sm">Openings</a>
       </div>
       <div class="flex-none items-center gap-2">
         <span class="text-sm opacity-70">{{ user.get_username }}</span>

@@ -70,7 +70,7 @@ The opening form lets staff pick existing skills and type a new skill name. A ne
 ### Acceptance criteria
 
 - [ ] Staff can create, edit, view and list openings. The list shows status, with a "closed" badge on closed openings.
-- [ ] Close and reopen work repeatedly and are POST-only.
+- [ ] Close and reopen work repeatedly and are POST-only (test).
 - [ ] The opening form can attach existing skills and add a new one in the same submit.
 - [ ] Adding "python" when "Python" exists attaches the existing skill and creates no new row (test).
 - [ ] The DB rejects a case-insensitive duplicate skill name (test).

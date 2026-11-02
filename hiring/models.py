@@ -40,3 +40,48 @@ class Candidate(models.Model):
 
     def get_absolute_url(self):
         return reverse("hiring:candidate_detail", args=[self.pk])
+
+
+class Skill(models.Model):
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [
+            # One skill per name, ignoring capitalization ("Python" == "python").
+            models.UniqueConstraint(
+                Lower("name"),
+                name="unique_skill_name_ignore_case",
+            ),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class JobOpening(models.Model):
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        CLOSED = "closed", "Closed"
+
+    title = models.CharField(max_length=200)
+    department = models.CharField(max_length=100)
+    location = models.CharField(max_length=100)
+    description = models.TextField()
+    status = models.CharField(max_length=10, choices=Status, default=Status.OPEN)
+    skills = models.ManyToManyField(Skill, blank=True, related_name="openings")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["title"]
+
+    def __str__(self):
+        return self.title
+
+    def get_absolute_url(self):
+        return reverse("hiring:opening_detail", args=[self.pk])
+
+    @property
+    def is_closed(self):
+        return self.status == self.Status.CLOSED

@@ -1,10 +1,11 @@
 from django.contrib import messages
 from django.db.models import Q
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DetailView, ListView, UpdateView
 
-from .forms import CandidateForm
-from .models import Candidate
+from .forms import CandidateForm, JobOpeningForm
+from .models import Candidate, JobOpening
 
 # Every view here requires login through LoginRequiredMiddleware (see settings).
 
@@ -55,3 +56,54 @@ class CandidateUpdateView(UpdateView):
     def form_valid(self, form):
         messages.success(self.request, "Candidate updated.")
         return super().form_valid(form)
+
+
+class JobOpeningListView(ListView):
+    model = JobOpening
+    context_object_name = "openings"
+
+    def get_queryset(self):
+        return super().get_queryset().prefetch_related("skills")
+
+
+class JobOpeningDetailView(DetailView):
+    model = JobOpening
+    context_object_name = "opening"
+
+
+class JobOpeningCreateView(CreateView):
+    model = JobOpening
+    form_class = JobOpeningForm
+
+    def form_valid(self, form):
+        messages.success(self.request, "Opening created.")
+        return super().form_valid(form)
+
+
+class JobOpeningUpdateView(UpdateView):
+    model = JobOpening
+    form_class = JobOpeningForm
+
+    def form_valid(self, form):
+        messages.success(self.request, "Opening updated.")
+        return super().form_valid(form)
+
+
+@require_POST
+def opening_close(request, pk):
+    """Close an opening so it stops accepting new applications."""
+    opening = get_object_or_404(JobOpening, pk=pk)
+    opening.status = JobOpening.Status.CLOSED
+    opening.save(update_fields=["status", "updated_at"])
+    messages.success(request, "Opening closed. It no longer accepts new applications.")
+    return redirect(opening)
+
+
+@require_POST
+def opening_reopen(request, pk):
+    """Reopen a closed opening so it accepts new applications again."""
+    opening = get_object_or_404(JobOpening, pk=pk)
+    opening.status = JobOpening.Status.OPEN
+    opening.save(update_fields=["status", "updated_at"])
+    messages.success(request, "Opening reopened.")
+    return redirect(opening)

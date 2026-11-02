@@ -1,6 +1,6 @@
 import pytest
 
-from hiring.models import Candidate
+from hiring.models import Candidate, JobOpening
 
 
 @pytest.fixture
@@ -23,4 +23,15 @@ def candidate(db):
         last_name="Lee",
         email="Ann.Lee@example.com",
         source=Candidate.Source.WEBSITE,
+    )
+
+
+@pytest.fixture
+def opening(db):
+    """An open job opening with no skills."""
+    return JobOpening.objects.create(
+        title="Backend Developer",
+        department="Engineering",
+        location="Amarillo, TX",
+        description="Build and maintain our Django services.",
     )
