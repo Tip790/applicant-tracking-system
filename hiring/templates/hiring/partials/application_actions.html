@@ -7,18 +7,23 @@ Each button submits its stage to the move view, which swaps in the new row.
 <button type="button" class="btn btn-sm" popovertarget="actions-{{ application.pk }}"
         style="anchor-name: --actions-{{ application.pk }}">Actions ▾</button>
 <div id="actions-{{ application.pk }}" popover
-     class="dropdown dropdown-end w-72 rounded-box bg-base-100 p-3 shadow-lg"
+     class="dropdown dropdown-end w-96 rounded-box bg-base-100 p-3 shadow-lg"
      style="position-anchor: --actions-{{ application.pk }}">
   <div class="mb-2 flex items-center justify-between gap-2">
     <span class="font-semibold">{{ application.candidate }}</span>
     {% include "hiring/partials/stage_badge.html" with stage=application.stage label=application.get_stage_display %}
   </div>
+  {% include "hiring/partials/progress_tracker.html" %}
+  <div class="divider my-1"></div>
 
   {% if options %}
     <form hx-post="{% url 'hiring:application_move' application.pk %}"
           hx-target="#application-{{ application.pk }}" hx-swap="outerHTML"
           class="flex flex-col gap-2">
       {% csrf_token %}
+      {% if options.reopen %}
+        <button type="submit" name="stage" value="{{ options.reopen.value }}" class="btn btn-warning btn-sm">Reopen to {{ options.reopen.label }}</button>
+      {% endif %}
       {% if options.advance %}
         <button type="submit" name="stage" value="{{ options.advance.value }}" class="btn btn-primary btn-sm">Advance to {{ options.advance.label }} →</button>
       {% endif %}
@@ -33,14 +38,16 @@ Each button submits its stage to the move view, which swaps in the new row.
           {% endfor %}
         </div>
       {% endif %}
-      <div class="flex gap-2">
-        {% if options.reject %}
-          <button type="submit" name="stage" value="{{ options.reject.value }}" class="btn btn-outline btn-error btn-sm flex-1">Reject</button>
-        {% endif %}
-        {% if options.withdraw %}
-          <button type="submit" name="stage" value="{{ options.withdraw.value }}" class="btn btn-ghost btn-sm flex-1">Mark withdrawn</button>
-        {% endif %}
-      </div>
+      {% if options.reject or options.withdraw %}
+        <div class="flex gap-2">
+          {% if options.reject %}
+            <button type="submit" name="stage" value="{{ options.reject.value }}" class="btn btn-outline btn-error btn-sm flex-1">Reject</button>
+          {% endif %}
+          {% if options.withdraw %}
+            <button type="submit" name="stage" value="{{ options.withdraw.value }}" class="btn btn-ghost btn-sm flex-1">Mark withdrawn</button>
+          {% endif %}
+        </div>
+      {% endif %}
     </form>
   {% elif application.stage == "hired" %}
     <p class="text-sm opacity-70">Hired is final.</p>

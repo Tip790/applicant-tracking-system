@@ -90,11 +90,23 @@ def create_application(candidate, opening, user):
 # --- Stage moves ----------------------------------------------------------
 
 
+def previous_stage(application):
+    """The stage the application held just before its current one, from its history.
+
+    Returns None when the history doesn't show how it reached its current stage.
+    """
+    changes = list(application.stage_changes.all())  # list() uses prefetched rows
+    if changes and changes[-1].to_stage == application.stage and changes[-1].from_stage:
+        return Stage(changes[-1].from_stage)
+    return None
+
+
 def move_refusal_reason(application, to_stage):
     """Return why this move isn't allowed, or None if it is ("Flexible" rules).
 
     - From an active stage: any other active stage, Rejected or Withdrawn.
     - Hired only from Offer, and Hired is final.
+    - Rejected or Withdrawn: only "reopen" back to the stage held just before.
     """
     current = application.stage
     if current == Stage.HIRED:
@@ -102,8 +114,15 @@ def move_refusal_reason(application, to_stage):
     if to_stage == Stage.HIRED and current != Stage.OFFER:
         return "Hired is only reachable from Offer."
     if current not in ACTIVE_STAGES:
-        # Phase 5 adds "Reopen to [previous stage]" for Rejected and Withdrawn.
-        return f"{application.get_stage_display()} applications can't be moved."
+        reopen_to = previous_stage(application)
+        if reopen_to is None:
+            return f"{application.get_stage_display()} applications can't be moved."
+        if to_stage != reopen_to:
+            return (
+                f"{application.get_stage_display()} applications can only be reopened "
+                f"to {reopen_to.label}."
+            )
+        return None
     if to_stage == current:
         return f"This application is already in {application.get_stage_display()}."
     if to_stage not in Stage.values:
@@ -126,6 +145,9 @@ def move_options(application):
     def allowed(stage):
         return stage if stage and move_refusal_reason(application, stage) is None else None
 
+    if application.stage in (Stage.REJECTED, Stage.WITHDRAWN):
+        reopen = allowed(previous_stage(application))
+        return {"reopen": reopen} if reopen else None
     if application.stage not in ACTIVE_STAGES:
         return None
     position = PIPELINE.index(application.stage)
@@ -143,6 +165,22 @@ def move_options(application):
         "reject": allowed(Stage.REJECTED),
         "withdraw": allowed(Stage.WITHDRAWN),
     }
+
+
+def progress_steps(application):
+    """The 1–6 progress tracker: each pipeline stage and whether it was reached.
+
+    Rejected and Withdrawn applications show the steps up to the stage they left from.
+    """
+    if application.stage in PIPELINE:
+        last_reached = application.stage
+    else:
+        last_reached = previous_stage(application)
+    reached_count = PIPELINE.index(last_reached) + 1 if last_reached in PIPELINE else 0
+    return [
+        {"stage": stage, "reached": position < reached_count}
+        for position, stage in enumerate(PIPELINE)
+    ]
 
 
 def move_application(application, to_stage, user):

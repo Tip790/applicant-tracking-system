@@ -76,12 +76,52 @@ def test_every_allowed_flexible_move_succeeds(application, staff_user, start, ta
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("start", [Stage.REJECTED, Stage.WITHDRAWN])
-def test_rejected_and_withdrawn_cannot_move_yet(application, staff_user, start):
-    # Phase 5 adds "Reopen to [previous stage]"; until then nothing moves them.
-    set_stage(application, start)
-    with pytest.raises(rules.RuleViolation, match="can't be moved"):
-        rules.move_application(application, Stage.APPLIED, staff_user)
+@pytest.mark.parametrize("final_stage", [Stage.REJECTED, Stage.WITHDRAWN])
+def test_reopen_returns_to_the_previous_stage_and_records_a_stage_change(
+    application, staff_user, django_user_model, final_stage
+):
+    rules.move_application(application, Stage.INTERVIEW, staff_user)
+    rules.move_application(application, final_stage, staff_user)
+    reopener = django_user_model.objects.create_user(username="reopener", password="pass12345")
+
+    assert rules.move_refusal_reason(application, Stage.INTERVIEW) is None
+    rules.move_application(application, Stage.INTERVIEW, reopener)
+
+    application.refresh_from_db()
+    assert application.stage == Stage.INTERVIEW
+    changes = list(application.stage_changes.all())
+    assert len(changes) == 4  # Applied, → Interview, → final stage, reopen
+    reopen = changes[-1]
+    assert (reopen.from_stage, reopen.to_stage, reopen.changed_by) == (
+        final_stage,
+        Stage.INTERVIEW,
+        reopener,
+    )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("final_stage", [Stage.REJECTED, Stage.WITHDRAWN])
+@pytest.mark.parametrize(
+    "target",
+    # Every stage except Interview (the reopen target) and Hired (refused by its own rule).
+    [stage for stage in Stage if stage not in (Stage.INTERVIEW, Stage.HIRED)],
+)
+def test_rejected_or_withdrawn_can_only_move_back_to_the_previous_stage(
+    application, staff_user, final_stage, target
+):
+    rules.move_application(application, Stage.INTERVIEW, staff_user)
+    rules.move_application(application, final_stage, staff_user)
+    history_before = application.stage_changes.count()
+
+    with pytest.raises(rules.RuleViolation) as refusal:
+        rules.move_application(application, target, staff_user)
+
+    assert str(refusal.value) == (
+        f"{final_stage.label} applications can only be reopened to Interview."
+    )
+    application.refresh_from_db()
+    assert application.stage == final_stage
+    assert application.stage_changes.count() == history_before
 
 
 @pytest.mark.django_db
@@ -140,6 +180,43 @@ def test_move_options_offer_advances_to_hired_and_hired_is_never_a_jump(applicat
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("stage", [Stage.HIRED, Stage.REJECTED, Stage.WITHDRAWN])
-def test_final_stages_offer_no_moves_yet(application, stage):
+def test_no_moves_for_hired_or_when_history_has_no_previous_stage(application, stage):
+    # set_stage skips the history, so Rejected/Withdrawn have no stage to reopen to.
     set_stage(application, stage)
     assert rules.move_options(application) is None
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("final_stage", [Stage.REJECTED, Stage.WITHDRAWN])
+def test_move_options_for_rejected_or_withdrawn_offer_only_reopen(
+    application, staff_user, final_stage
+):
+    rules.move_application(application, Stage.SCREENING, staff_user)
+    rules.move_application(application, final_stage, staff_user)
+
+    assert rules.move_options(application) == {"reopen": Stage.SCREENING}
+
+
+def reached_stages(application):
+    return [step["stage"] for step in rules.progress_steps(application) if step["reached"]]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("position", range(len(rules.PIPELINE)))
+def test_tracker_reaches_every_step_up_to_the_current_stage(application, position):
+    set_stage(application, rules.PIPELINE[position])
+    steps = rules.progress_steps(application)
+
+    assert [step["stage"] for step in steps] == rules.PIPELINE
+    assert reached_stages(application) == rules.PIPELINE[: position + 1]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("final_stage", [Stage.REJECTED, Stage.WITHDRAWN])
+def test_tracker_for_rejected_or_withdrawn_stops_at_the_stage_they_left(
+    application, staff_user, final_stage
+):
+    rules.move_application(application, Stage.INTERVIEW, staff_user)
+    rules.move_application(application, final_stage, staff_user)
+
+    assert reached_stages(application) == [Stage.APPLIED, Stage.SCREENING, Stage.INTERVIEW]

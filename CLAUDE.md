@@ -19,8 +19,11 @@ An internal, login-only applicant tracking system for hiring staff (CIDM 3312 Pr
 - State-changing actions are function views with `@require_POST`; add each to `app_post_action_urls` in `hiring/tests/test_auth.py`.
 - Business rules go in `hiring/rules.py`. Create skills only through `rules.get_or_create_skill` (case-insensitive reuse).
 - Show an opening's status with `hiring/partials/opening_status_badge.html` wherever it appears.
+- Show a stage with `hiring/partials/stage_badge.html` and an application's progress with `hiring/partials/progress_tracker.html`.
+- Write Tailwind/DaisyUI class names out in full in templates (e.g. `step-error`, never `step-{{ color }}`); the CSS build only finds literal class names.
 - DaisyUI is v5: use `input`/`select`/`textarea` (no `-bordered`), and no `form-control`/`label-text`.
 - Change stages only through `rules.move_application`. `rules.move_refusal_reason` is the one stage-rule check; the Actions buttons come from `rules.move_options`, which uses it.
+- Reopen (Rejected/Withdrawn → the stage before) reads `rules.previous_stage` from StageChange history. Tests that need a reopen must reach the final stage through `rules.move_application`, not by setting `stage` directly.
 - HTMX row actions: on success return only the row partial (`hx-target="#application-<pk>"`, `hx-swap="outerHTML"`). On a refusal return 422 with an alert and `HX-Retarget: #move-alert`. `base.html` configures HTMX to swap 422 and sends the CSRF token via `hx-headers`.
 - Dropdowns inside the table use DaisyUI's popover dropdown (`popovertarget` + CSS anchor) so the scrolling card doesn't clip them.
 

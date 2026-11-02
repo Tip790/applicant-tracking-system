@@ -1,0 +1,21 @@
+{% comment %}
+The numbered 1–6 progress tracker (DaisyUI steps). Pass `application`.
+Reached steps are blue, red for Rejected and amber for Withdrawn.
+Rejected and Withdrawn show how far the applicant got before leaving.
+{% endcomment %}
+{% with previous=application.previous_stage %}
+<ul class="steps w-full text-xs">
+  {% for step in application.progress_steps %}
+    {% if not step.reached %}<li class="step">{{ step.stage.label }}</li>
+    {% elif application.stage == "rejected" %}<li class="step step-error">{{ step.stage.label }}</li>
+    {% elif application.stage == "withdrawn" %}<li class="step step-warning">{{ step.stage.label }}</li>
+    {% else %}<li class="step step-primary">{{ step.stage.label }}</li>
+    {% endif %}
+  {% endfor %}
+</ul>
+{% if application.stage == "rejected" and previous %}
+  <p class="text-xs text-error">Rejected after {{ previous.label }}</p>
+{% elif application.stage == "withdrawn" and previous %}
+  <p class="text-xs opacity-70">Withdrawn from {{ previous.label }}</p>
+{% endif %}
+{% endwith %}

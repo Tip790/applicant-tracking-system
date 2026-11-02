@@ -143,6 +143,18 @@ class Application(models.Model):
 
         return rules.move_options(self)
 
+    def previous_stage(self):
+        """The stage held just before the current one (used for "Reopen")."""
+        from . import rules
+
+        return rules.previous_stage(self)
+
+    def progress_steps(self):
+        """The 1–6 progress tracker steps, each marked reached or not."""
+        from . import rules
+
+        return rules.progress_steps(self)
+
     def stage_entered_at(self):
         """When the application moved into its current stage, from the StageChange history."""
         changes = list(self.stage_changes.all())

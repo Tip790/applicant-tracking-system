@@ -41,7 +41,7 @@ def test_successful_move_returns_only_the_row_fragment(staff_client, staff_user,
     assert "<html" not in html
     assert "<table" not in html
     assert "navbar" not in html
-    assert '<span class="badge badge-sm badge-info">Screening</span>' in html
+    assert '<span class="badge badge-sm badge-info whitespace-nowrap">Screening</span>' in html
     # Any old error alert is cleared out-of-band.
     assert '<div id="move-alert" hx-swap-oob="true"></div>' in html
 
@@ -118,6 +118,95 @@ def test_hired_dropdown_shows_a_final_note_instead_of_buttons(staff_client, appl
 
     assert "Hired is final." in dropdown
     assert "<button" not in dropdown  # the popover holds no move buttons
+
+
+def move(staff_client, application, stage):
+    return staff_client.post(
+        move_url(application), {"stage": stage}, headers={"HX-Request": "true"}
+    )
+
+
+@pytest.mark.django_db
+def test_dropdown_tracker_highlights_reached_steps(staff_client, application):
+    application.stage = Stage.INTERVIEW
+    application.save()
+    dropdown = actions_html(staff_client, application, reverse("hiring:application_list"))
+
+    assert dropdown.count('class="step step-primary"') == 3
+    assert dropdown.count('class="step"') == 3
+    for label in ["Applied", "Screening", "Interview", "Final Review", "Offer", "Hired"]:
+        assert f">{label}</li>" in dropdown
+
+
+@pytest.mark.django_db
+def test_hired_dropdown_shows_the_full_tracker(staff_client, application):
+    application.stage = Stage.HIRED
+    application.save()
+    dropdown = actions_html(staff_client, application, reverse("hiring:application_list"))
+
+    assert dropdown.count('class="step step-primary"') == 6
+
+
+@pytest.mark.django_db
+def test_rejected_dropdown_shows_red_steps_a_note_and_only_reopen(staff_client, application):
+    move(staff_client, application, Stage.INTERVIEW)
+    move(staff_client, application, Stage.REJECTED)
+    dropdown = " ".join(
+        actions_html(staff_client, application, reverse("hiring:application_list")).split()
+    )
+
+    assert dropdown.count('class="step step-error"') == 3
+    assert dropdown.count('class="step"') == 3
+    assert "Rejected after Interview" in dropdown
+    assert 'value="interview" class="btn btn-warning btn-sm">Reopen to Interview' in dropdown
+    assert dropdown.count('name="stage"') == 1  # Reopen is the only move
+
+
+@pytest.mark.django_db
+def test_withdrawn_dropdown_shows_the_stage_it_was_withdrawn_from(staff_client, application):
+    move(staff_client, application, Stage.SCREENING)
+    move(staff_client, application, Stage.WITHDRAWN)
+    dropdown = " ".join(
+        actions_html(staff_client, application, reverse("hiring:application_list")).split()
+    )
+
+    assert dropdown.count('class="step step-warning"') == 2
+    assert "Withdrawn from Screening" in dropdown
+    assert "Reopen to Screening" in dropdown
+    assert dropdown.count('name="stage"') == 1
+
+
+@pytest.mark.django_db
+def test_reopen_rerenders_the_row_with_the_right_tracker_and_buttons(staff_client, application):
+    move(staff_client, application, Stage.INTERVIEW)
+    move(staff_client, application, Stage.REJECTED)
+
+    response = move(staff_client, application, Stage.INTERVIEW)
+
+    assert response.status_code == 200
+    html = " ".join(response.content.decode().split())
+    assert html.startswith(f'<tr id="application-{application.pk}"')
+    assert '<span class="badge badge-sm badge-primary whitespace-nowrap">Interview</span>' in html
+    assert html.count('class="step step-primary"') == 3
+    assert "step-error" not in html
+    assert "Rejected after" not in html
+    assert "Advance to Final Review →" in html
+    assert "Reopen to" not in html
+    application.refresh_from_db()
+    assert application.stage == Stage.INTERVIEW
+
+
+@pytest.mark.django_db
+def test_tampered_reopen_to_the_wrong_stage_returns_an_error_alert(staff_client, application):
+    move(staff_client, application, Stage.INTERVIEW)
+    move(staff_client, application, Stage.REJECTED)
+
+    response = move(staff_client, application, Stage.OFFER)
+
+    assert response.status_code == 422
+    assert "Rejected applications can only be reopened to Interview." in response.content.decode()
+    application.refresh_from_db()
+    assert application.stage == Stage.REJECTED
 
 
 @pytest.mark.django_db

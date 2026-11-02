@@ -28,6 +28,37 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-02 — Phase 5: progress tracker and reopen
+
+### Prompts
+1. `/implement @prd/applicant-tracking-system.md  @plans/applicant-tracking-system.md  implement Phase 5`
+2. `only do the first 2 as TDD, remove the third one focused on the color of the tracker`
+3. `approved, go ahead`
+4. `continue`
+5. `approved, go ahead`
+6. `continue!`
+7. `when displaying what stage an applicant is on, the final stage badge doesn't fit within it's border, fix if possibke`
+8. `if you believe that anything needs to be added to CLAUDE.md add it, then continue with the implement skill`
+
+### Summary
+- **Outcome:** Phase 5 was built on top of Phase 4:
+  - `hiring/rules.py` gained `previous_stage` (the from-stage of the StageChange that moved the application into its current stage, or `None` if the history doesn't show it) and `progress_steps` (the six pipeline steps, each marked reached; Rejected/Withdrawn count up to the stage they left from). `move_refusal_reason` now lets Rejected or Withdrawn move only back to that previous stage, and refuses every other target with "Rejected applications can only be reopened to Interview." (names filled in). `move_options` returns only a `reopen` option for them. `Application` got matching `previous_stage()` and `progress_steps()` methods for the templates.
+  - A new `progress_tracker.html` partial: DaisyUI steps with reached steps in blue, red for Rejected (with "Rejected after [stage]") and yellow for Withdrawn (with "Withdrawn from [stage]"). Hired shows all six steps. The Actions dropdown shows it under the name and badge, followed by a divider and a warning-style "Reopen to [stage]" button for Rejected/Withdrawn.
+  - Stage badges got `whitespace-nowrap` so "Final Review" stays inside its border.
+  - 144 tests pass. Two behaviors were built test-first, each through an approved RED → GREEN cycle: a reopen to the previous stage succeeds and records exactly one StageChange with the right from/to/user (for both Rejected and Withdrawn), and every other move out of Rejected/Withdrawn is refused with a reason naming the reopen stage and changes nothing. Ordinary tests cover the reopen option, the tracker's reached steps for every pipeline stage and for Rejected/Withdrawn, the dropdown's colored steps, notes and single Reopen button, the Hired full tracker, the re-rendered row after a reopen, and a tampered wrong-stage reopen returning the 422 alert.
+  - Ruff check and format are clean, there are no missing migrations, and the CSS build contains the step, divider, warning-button and nowrap styles.
+  - `CLAUDE.md` gained three lines: use the stage badge and tracker partials, write Tailwind class names out in full, and reopen reads the history (so tests must reach Rejected/Withdrawn through `rules.move_application`).
+- **Deviations:**
+  - Claude proposed three TDD behaviors. The user dropped the third (the rejected tracker's red steps and note), so it was built and tested normally instead.
+  - Claude said it would lay the tracker out vertically, then switched to horizontal and widened the dropdown from 18rem to 24rem because six vertical steps made the dropdown very tall. It told the user when presenting the manual check.
+  - Claude made a few choices without asking: yellow steps for Withdrawn (matching its badge), the wording of the refusal reason and of the "Withdrawn from" note, the history-based definition of the previous stage, and offering no moves when the history doesn't show one.
+  - The user reported a badge problem during manual verification (prompt 7) and then asked Claude to continue with the skill (prompt 8) without separately saying that verification passed. Claude took prompt 8 as approval to finish the phase.
+- **Sideways:**
+  - Both RED runs failed on assertions without needing stubs. Behavior 1's test first asks `move_refusal_reason` whether the reopen is allowed, which failed on the old "can't be moved" answer.
+  - Two Phase 4 tests no longer matched the rules: `test_rejected_and_withdrawn_cannot_move_yet` was deleted when behavior 1's test was written (Claude said so at the RED step), and `test_final_stages_offer_no_moves_yet` was renamed and narrowed to Hired and to Rejected/Withdrawn with no history.
+  - Claude left an unused `staff_user` fixture in one test and removed it. Ruff flagged one line over 100 characters, which `ruff format` fixed. The tests were re-run afterwards and still passed.
+  - The user found that the "Final Review" badge spilled outside its border in the browser. Claude hadn't caught it because it never opened the page; the tests only check the HTML. Five test assertions that matched the exact badge HTML were updated for the new class.
+
 ## 2026-11-02 — Phase 4: moving applicants with HTMX
 
 ### Prompts

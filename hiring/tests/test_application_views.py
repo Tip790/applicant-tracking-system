@@ -123,7 +123,7 @@ def test_candidate_page_lists_their_applications_with_stage_badges(staff_client,
     html = staff_client.get(application.candidate.get_absolute_url()).content.decode()
 
     assert "Backend Developer" in html
-    assert '<span class="badge badge-sm badge-neutral">Applied</span>' in html
+    assert '<span class="badge badge-sm badge-neutral whitespace-nowrap">Applied</span>' in html
     assert create_url(candidate=application.candidate.pk) in html
 
 
@@ -187,8 +187,8 @@ def test_stage_badges_are_colored_by_stage(staff_client, staff_user, candidate, 
 
     html = staff_client.get(reverse("hiring:application_list")).content.decode()
 
-    assert '<span class="badge badge-sm badge-success">Hired</span>' in html
-    assert '<span class="badge badge-sm badge-error">Rejected</span>' in html
+    assert '<span class="badge badge-sm badge-success whitespace-nowrap">Hired</span>' in html
+    assert '<span class="badge badge-sm badge-error whitespace-nowrap">Rejected</span>' in html
 
 
 @pytest.mark.django_db
