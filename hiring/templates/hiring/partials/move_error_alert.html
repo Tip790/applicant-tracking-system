@@ -1,0 +1,4 @@
+{% comment %}Shown above the table when a stage move is refused. Pass `application` and `reason`.{% endcomment %}
+<div role="alert" class="alert alert-error mb-4">
+  <span><strong>Couldn't move {{ application.candidate }} ({{ application.opening }}):</strong> {{ reason }}</span>
+</div>

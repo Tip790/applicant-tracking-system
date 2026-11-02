@@ -16,5 +16,5 @@
     {% endfor %}
   </td>
   <td class="whitespace-nowrap">{{ application.stage_entered_at|timesince }}</td>
-  <td class="opacity-50">—</td>{# Actions dropdown arrives in Phase 4. #}
+  <td>{% include "hiring/partials/application_actions.html" %}</td>
 </tr>

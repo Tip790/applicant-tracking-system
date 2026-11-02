@@ -137,6 +137,12 @@ class Application(models.Model):
     def is_active(self):
         return self.stage in ACTIVE_STAGES
 
+    def move_options(self):
+        """The moves the Actions dropdown offers. The rule itself lives in rules.py."""
+        from . import rules  # imported here because rules.py imports this module
+
+        return rules.move_options(self)
+
     def stage_entered_at(self):
         """When the application moved into its current stage, from the StageChange history."""
         changes = list(self.stage_changes.all())

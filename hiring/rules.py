@@ -87,6 +87,86 @@ def create_application(candidate, opening, user):
     return application
 
 
+# --- Stage moves ----------------------------------------------------------
+
+
+def move_refusal_reason(application, to_stage):
+    """Return why this move isn't allowed, or None if it is ("Flexible" rules).
+
+    - From an active stage: any other active stage, Rejected or Withdrawn.
+    - Hired only from Offer, and Hired is final.
+    """
+    current = application.stage
+    if current == Stage.HIRED:
+        return "Hired is final. This application can't be moved."
+    if to_stage == Stage.HIRED and current != Stage.OFFER:
+        return "Hired is only reachable from Offer."
+    if current not in ACTIVE_STAGES:
+        # Phase 5 adds "Reopen to [previous stage]" for Rejected and Withdrawn.
+        return f"{application.get_stage_display()} applications can't be moved."
+    if to_stage == current:
+        return f"This application is already in {application.get_stage_display()}."
+    if to_stage not in Stage.values:
+        return "That isn't a hiring stage."
+    # Phase 6 adds: archived candidates' applications can't be moved.
+    return None
+
+
+# The 1–6 progress order. "Advance" and "Back" step through this list.
+PIPELINE = [*ACTIVE_STAGES, Stage.HIRED]
+
+
+def move_options(application):
+    """The moves the Actions dropdown offers, grouped by button style.
+
+    Returns None when no move is allowed (e.g. Hired). Every option is checked
+    with move_refusal_reason, so the buttons always match what the server allows.
+    """
+
+    def allowed(stage):
+        return stage if stage and move_refusal_reason(application, stage) is None else None
+
+    if application.stage not in ACTIVE_STAGES:
+        return None
+    position = PIPELINE.index(application.stage)
+    advance = allowed(PIPELINE[position + 1])
+    back = allowed(PIPELINE[position - 1]) if position > 0 else None
+    jumps = [
+        stage
+        for stage in ACTIVE_STAGES
+        if stage not in (application.stage, advance, back) and allowed(stage)
+    ]
+    return {
+        "advance": advance,
+        "back": back,
+        "jumps": jumps,
+        "reject": allowed(Stage.REJECTED),
+        "withdraw": allowed(Stage.WITHDRAWN),
+    }
+
+
+def move_application(application, to_stage, user):
+    """Move an application to another stage and record the move in its history.
+
+    Raises RuleViolation if the move isn't allowed.
+    The new stage and its StageChange are saved together or not at all.
+    """
+    reason = move_refusal_reason(application, to_stage)
+    if reason:
+        raise RuleViolation(reason)
+    from_stage = application.stage
+    with transaction.atomic():
+        application.stage = to_stage
+        application.save(update_fields=["stage", "updated_at"])
+        StageChange.objects.create(
+            application=application,
+            from_stage=from_stage,
+            to_stage=to_stage,
+            changed_by=user,
+        )
+    return application
+
+
 def count_active_applications(opening):
     """How many of this opening's applications are still in progress."""
     return opening.applications.filter(stage__in=ACTIVE_STAGES).count()

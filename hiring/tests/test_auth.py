@@ -23,11 +23,12 @@ def app_page_urls(candidate, opening):
     ]
 
 
-def app_post_action_urls(opening):
+def app_post_action_urls(opening, application):
     """Every POST-only action added so far."""
     return [
         reverse("hiring:opening_close", args=[opening.pk]),
         reverse("hiring:opening_reopen", args=[opening.pk]),
+        reverse("hiring:application_move", args=[application.pk]),
     ]
 
 
@@ -48,14 +49,17 @@ def test_logged_in_staff_can_open_every_page(staff_client, candidate, opening):
 
 
 @pytest.mark.django_db
-def test_anonymous_post_actions_are_sent_to_login_and_change_nothing(client, opening):
+def test_anonymous_post_actions_are_sent_to_login_and_change_nothing(client, opening, application):
     login_url = reverse("login")
-    for url in app_post_action_urls(opening):
-        response = client.post(url)
+    for url in app_post_action_urls(opening, application):
+        response = client.post(url, {"stage": "screening"})
         assert response.status_code == 302, url
         assert response.url.startswith(f"{login_url}?next="), url
     opening.refresh_from_db()
+    application.refresh_from_db()
     assert opening.status == opening.Status.OPEN
+    assert application.stage == "applied"
+    assert application.stage_changes.count() == 1
 
 
 @pytest.mark.django_db

@@ -92,6 +92,31 @@ def application_create(request):
     )
 
 
+@require_POST
+def application_move(request, pk):
+    """Move one application to the stage in POST["stage"] (sent by HTMX).
+
+    Success: returns only the re-rendered table row, which HTMX swaps in place.
+    Refused: returns 422 with an error alert, retargeted to the alert area above
+    the table (base.html tells HTMX to swap 422 responses). The row is left alone.
+    """
+    application = get_object_or_404(applications_for_table(), pk=pk)
+    try:
+        rules.move_application(application, request.POST.get("stage", ""), request.user)
+    except rules.RuleViolation as error:
+        response = render(
+            request,
+            "hiring/partials/move_error_alert.html",
+            {"application": application, "reason": str(error)},
+            status=422,
+        )
+        response["HX-Retarget"] = "#move-alert"
+        response["HX-Reswap"] = "innerHTML"
+        return response
+    application = applications_for_table().get(pk=pk)  # fresh history for the row
+    return render(request, "hiring/partials/move_success.html", {"application": application})
+
+
 class CandidateListView(ListView):
     model = Candidate
     context_object_name = "candidates"

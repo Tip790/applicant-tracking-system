@@ -28,6 +28,41 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-02 — Phase 4: moving applicants with HTMX
+
+### Prompts
+1. `/implement @prd/applicant-tracking-system.md  @plans/applicant-tracking-system.md  implement Phase 4`
+2. `those design choices are fine, continue`
+3. `approved, go ahead`
+4. `continue`
+5. `approved, go ahead`
+6. `continue`
+7. `approved, go ahead`
+8. `continue`
+9. `manual verification passed, go ahead, before commit update CLAUDE.md with only the most important lines, like the HTMX conventions`
+10. `remove the firefox mention from PROMPTS.md then continue` (correction, after interrupting Claude's edit and commit)
+11. `keep the dropdown browser part, include these messages in the PROMPTS.MD as well, then continue` (correction, after interrupting Claude's edit)
+12. `that can stay, continue` (after interrupting Claude's attempt to reword its own description of prompt 10 in the log)
+
+### Summary
+- **Outcome:** Phase 4 was built on top of Phase 3:
+  - `hiring/rules.py` gained `move_refusal_reason` (the Flexible rules: active → any other active stage, Rejected or Withdrawn; Hired only from Offer; Hired final; nothing out of Rejected/Withdrawn until Phase 5's reopen; no move to the current or an unknown stage), `move_application` (checks the rule, then saves the stage and a StageChange in one transaction) and `move_options` (the buttons the dropdown offers, each checked with `move_refusal_reason`). `Application.move_options()` hands this to the templates.
+  - A POST-only `application_move` view at `/applications/<pk>/move/`. Success returns only the re-rendered row plus an out-of-band empty `#move-alert` that clears old errors. A refusal returns 422 with a DaisyUI error alert and `HX-Retarget: #move-alert`. An `htmx-config` meta tag in `base.html` makes HTMX swap 422 responses.
+  - An `application_actions.html` partial: a DaisyUI popover dropdown (so the scrolling table card doesn't clip it) with the candidate's name, a stage badge and buttons for only the legal moves — Advance (primary), Back (ghost), Jump to (small ghost), Reject (outlined error), Mark withdrawn (ghost). Hired shows "Hired is final." The All Applications page and the opening page share it through the row partial.
+  - 116 tests pass. Three behaviors were built test-first, each through an approved RED → GREEN cycle: a legal move records exactly one StageChange with the right from/to/user, illegal Hired moves are refused with a reason and change nothing, and a tampered illegal POST returns a 422 alert with the stage unchanged. Ordinary tests cover every allowed Flexible move, Rejected/Withdrawn and same/unknown-stage refusals, the transaction rollback, the button options, the row-only success fragment, POST-only, 404, login, closed openings, the dropdown labels and styles, the Hired note and the opening page.
+  - Ruff check and format are clean, there are no missing migrations, and the CSS build contains the new button, alert and popover styles. The user confirmed manual verification in the browser.
+  - `CLAUDE.md` gained three lines: stage moves go through the rules module, the HTMX row-action conventions, and the popover dropdown. At the user's request it was committed with this phase, including the user's own earlier uncommitted edits to it.
+- **Deviations:**
+  - Claude proposed two design choices before starting (422 + `HX-Retarget` + an `htmx-config` meta tag for the alert, and DaisyUI's popover dropdown). The user accepted both.
+  - Claude made a few choices without asking: the exact wording of the refusal reasons, refusing all moves out of Rejected/Withdrawn until Phase 5, refusing a move to the current stage, clearing the old alert out-of-band after a successful move, and showing "No moves available." for Rejected/Withdrawn rows.
+  - The dropdown header shows the name and stage badge now; the 1–6 tracker is left for Phase 5.
+- **Sideways:**
+  - Nothing failed. All three RED runs failed on assertions. For behaviors 1 and 3, Claude first wrote stubs (a `move_application` that changed nothing, and a move view that swallowed refusals and returned the row) so the tests could fail on assertions.
+  - Claude left an unused `popover_id` variable in the dropdown template's `with` tag and removed it right away. A first draft of the Hired-dropdown test sliced the HTML wrongly (it assumed the toggle button was inside the slice) and was fixed before the first run.
+  - Ruff reformatted one file. The tests were re-run afterwards and still passed.
+  - The dropdown uses CSS anchor positioning, a newer browser feature. It worked in the user's browser during manual verification.
+  - Claude's first draft of this log said the dropdown was "confirmed working" in Firefox, which Claude didn't know. Claude tried to reword it and commit in the same step. The user stopped both and asked for the Firefox mention to be removed (prompt 10). When Claude's next edit would have dropped the whole bullet, the user stopped that too and asked to keep the dropdown browser note (prompt 11).
+
 ## 2026-11-02 — Phase 3: record applications and the All Applications table
 
 ### Prompts

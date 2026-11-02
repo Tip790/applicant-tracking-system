@@ -1,0 +1,51 @@
+{% comment %}
+The Actions dropdown for one table row. Pass `application`.
+It is a DaisyUI popover dropdown, so it isn't cut off by the table's scrolling card.
+Each button submits its stage to the move view, which swaps in the new row.
+{% endcomment %}
+{% with options=application.move_options %}
+<button type="button" class="btn btn-sm" popovertarget="actions-{{ application.pk }}"
+        style="anchor-name: --actions-{{ application.pk }}">Actions ▾</button>
+<div id="actions-{{ application.pk }}" popover
+     class="dropdown dropdown-end w-72 rounded-box bg-base-100 p-3 shadow-lg"
+     style="position-anchor: --actions-{{ application.pk }}">
+  <div class="mb-2 flex items-center justify-between gap-2">
+    <span class="font-semibold">{{ application.candidate }}</span>
+    {% include "hiring/partials/stage_badge.html" with stage=application.stage label=application.get_stage_display %}
+  </div>
+
+  {% if options %}
+    <form hx-post="{% url 'hiring:application_move' application.pk %}"
+          hx-target="#application-{{ application.pk }}" hx-swap="outerHTML"
+          class="flex flex-col gap-2">
+      {% csrf_token %}
+      {% if options.advance %}
+        <button type="submit" name="stage" value="{{ options.advance.value }}" class="btn btn-primary btn-sm">Advance to {{ options.advance.label }} →</button>
+      {% endif %}
+      {% if options.back %}
+        <button type="submit" name="stage" value="{{ options.back.value }}" class="btn btn-ghost btn-sm">← Back to {{ options.back.label }}</button>
+      {% endif %}
+      {% if options.jumps %}
+        <div class="flex flex-wrap items-center gap-1">
+          <span class="text-xs opacity-70">Jump to</span>
+          {% for stage in options.jumps %}
+            <button type="submit" name="stage" value="{{ stage.value }}" class="btn btn-ghost btn-xs">{{ stage.label }}</button>
+          {% endfor %}
+        </div>
+      {% endif %}
+      <div class="flex gap-2">
+        {% if options.reject %}
+          <button type="submit" name="stage" value="{{ options.reject.value }}" class="btn btn-outline btn-error btn-sm flex-1">Reject</button>
+        {% endif %}
+        {% if options.withdraw %}
+          <button type="submit" name="stage" value="{{ options.withdraw.value }}" class="btn btn-ghost btn-sm flex-1">Mark withdrawn</button>
+        {% endif %}
+      </div>
+    </form>
+  {% elif application.stage == "hired" %}
+    <p class="text-sm opacity-70">Hired is final.</p>
+  {% else %}
+    <p class="text-sm opacity-70">No moves available.</p>
+  {% endif %}
+</div>
+{% endwith %}
