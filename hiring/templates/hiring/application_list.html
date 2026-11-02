@@ -4,9 +4,30 @@
 
 {% block content %}
 <h1 class="text-2xl font-bold mb-4">All Applications</h1>
-<div class="card bg-base-100 shadow">
-  <div class="card-body">
-    <p class="opacity-70">No applications yet.</p>
-  </div>
-</div>
+
+<form method="get" class="flex flex-wrap gap-2 mb-4">
+  <input type="search" name="q" value="{{ query }}" placeholder="Search by candidate name"
+         class="input w-full max-w-xs">
+  <select name="opening" class="select w-full max-w-xs">
+    <option value="">All openings</option>
+    {% for opening in openings %}
+      <option value="{{ opening.pk }}" {% if opening.pk|stringformat:"s" == selected_opening %}selected{% endif %}>
+        {{ opening }}{% if opening.is_closed %} (closed){% endif %}
+      </option>
+    {% endfor %}
+  </select>
+  <select name="stage" class="select w-full max-w-xs">
+    <option value="">All stages</option>
+    <option value="active" {% if selected_stage == "active" %}selected{% endif %}>Active only</option>
+    {% for value, label in stage_choices %}
+      <option value="{{ value }}" {% if value == selected_stage %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn">Filter</button>
+  {% if query or selected_opening or selected_stage %}
+    <a href="{% url 'hiring:application_list' %}" class="btn btn-ghost">Clear</a>
+  {% endif %}
+</form>
+
+{% include "hiring/partials/application_table.html" %}
 {% endblock %}

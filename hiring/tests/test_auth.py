@@ -17,6 +17,9 @@ def app_page_urls(candidate, opening):
         reverse("hiring:opening_create"),
         reverse("hiring:opening_detail", args=[opening.pk]),
         reverse("hiring:opening_update", args=[opening.pk]),
+        reverse("hiring:opening_close", args=[opening.pk]),  # GET shows the confirmation
+        reverse("hiring:application_create") + f"?candidate={candidate.pk}",
+        reverse("hiring:application_create") + f"?opening={opening.pk}",
     ]
 
 

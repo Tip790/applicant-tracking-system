@@ -1,18 +1,95 @@
 from django.contrib import messages
 from django.db.models import Q
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DetailView, ListView, UpdateView
 
-from .forms import CandidateForm, JobOpeningForm
-from .models import Candidate, JobOpening
+from . import rules
+from .forms import ApplicationForm, CandidateForm, JobOpeningForm
+from .models import ACTIVE_STAGES, Application, Candidate, JobOpening, Stage
 
 # Every view here requires login through LoginRequiredMiddleware (see settings).
 
 
+def applications_for_table():
+    """Applications with everything the table partial needs, loaded in a few queries."""
+    return Application.objects.select_related("candidate", "opening").prefetch_related(
+        "stage_changes"
+    )
+
+
 def application_list(request):
-    """All Applications page. The table is built in Phase 3."""
-    return render(request, "hiring/application_list.html")
+    """All Applications page: one table of every application, with search and filters.
+
+    GET parameters (all optional, combinable):
+      q        part of the candidate's first or last name
+      opening  an opening pk
+      stage    a stage value, or "active" for Applied through Offer
+    """
+    applications = applications_for_table()
+
+    query = request.GET.get("q", "").strip()
+    if query:
+        applications = applications.filter(
+            Q(candidate__first_name__icontains=query) | Q(candidate__last_name__icontains=query)
+        )
+
+    selected_opening = request.GET.get("opening", "")
+    if selected_opening.isdigit():
+        applications = applications.filter(opening_id=selected_opening)
+
+    selected_stage = request.GET.get("stage", "")
+    if selected_stage == "active":
+        applications = applications.filter(stage__in=ACTIVE_STAGES)
+    elif selected_stage:
+        applications = applications.filter(stage=selected_stage)
+
+    return render(
+        request,
+        "hiring/application_list.html",
+        {
+            "applications": applications,
+            "openings": JobOpening.objects.all(),
+            "stage_choices": Stage.choices,
+            "query": query,
+            "selected_opening": selected_opening,
+            "selected_stage": selected_stage,
+        },
+    )
+
+
+def application_create(request):
+    """Record an application, started from a candidate page or an opening page.
+
+    `?candidate=<pk>` fixes the candidate (pick an opening);
+    `?opening=<pk>` fixes the opening (pick a candidate).
+    """
+    candidate = opening = None
+    if request.GET.get("candidate"):
+        candidate = get_object_or_404(Candidate, pk=request.GET["candidate"])
+    elif request.GET.get("opening"):
+        opening = get_object_or_404(JobOpening, pk=request.GET["opening"])
+    else:
+        raise Http404("Start from a candidate or an opening.")
+
+    form = ApplicationForm(request.POST or None, candidate=candidate, opening=opening)
+    if request.method == "POST" and form.is_valid():
+        try:
+            rules.create_application(
+                form.cleaned_data["candidate"], form.cleaned_data["opening"], request.user
+            )
+        except rules.RuleViolation as error:
+            form.add_error(None, str(error))
+        else:
+            messages.success(request, "Application recorded.")
+            return redirect(candidate or opening)
+
+    return render(
+        request,
+        "hiring/application_form.html",
+        {"form": form, "candidate": candidate, "opening": opening},
+    )
 
 
 class CandidateListView(ListView):
@@ -38,6 +115,11 @@ class CandidateListView(ListView):
 
 class CandidateDetailView(DetailView):
     model = Candidate
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["applications"] = self.object.applications.select_related("opening")
+        return context
 
 
 class CandidateCreateView(CreateView):
@@ -70,6 +152,12 @@ class JobOpeningDetailView(DetailView):
     model = JobOpening
     context_object_name = "opening"
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # The same table as All Applications, pre-filtered to this opening.
+        context["applications"] = applications_for_table().filter(opening=self.object)
+        return context
+
 
 class JobOpeningCreateView(CreateView):
     model = JobOpening
@@ -89,14 +177,22 @@ class JobOpeningUpdateView(UpdateView):
         return super().form_valid(form)
 
 
-@require_POST
 def opening_close(request, pk):
-    """Close an opening so it stops accepting new applications."""
+    """GET shows a confirmation with the number of active applications; POST closes.
+
+    Closing only stops new applications. Applications in progress keep moving.
+    """
     opening = get_object_or_404(JobOpening, pk=pk)
-    opening.status = JobOpening.Status.CLOSED
-    opening.save(update_fields=["status", "updated_at"])
-    messages.success(request, "Opening closed. It no longer accepts new applications.")
-    return redirect(opening)
+    if request.method == "POST":
+        opening.status = JobOpening.Status.CLOSED
+        opening.save(update_fields=["status", "updated_at"])
+        messages.success(request, "Opening closed. It no longer accepts new applications.")
+        return redirect(opening)
+    return render(
+        request,
+        "hiring/jobopening_confirm_close.html",
+        {"opening": opening, "active_count": rules.count_active_applications(opening)},
+    )
 
 
 @require_POST

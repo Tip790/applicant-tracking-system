@@ -1,0 +1,10 @@
+{% comment %}A colored badge for one stage. Pass `stage` (the value) and `label` (the display name).{% endcomment %}
+{% if stage == "applied" %}<span class="badge badge-sm badge-neutral">{{ label }}</span>
+{% elif stage == "screening" %}<span class="badge badge-sm badge-info">{{ label }}</span>
+{% elif stage == "interview" %}<span class="badge badge-sm badge-primary">{{ label }}</span>
+{% elif stage == "final_review" %}<span class="badge badge-sm badge-secondary">{{ label }}</span>
+{% elif stage == "offer" %}<span class="badge badge-sm badge-accent">{{ label }}</span>
+{% elif stage == "hired" %}<span class="badge badge-sm badge-success">{{ label }}</span>
+{% elif stage == "rejected" %}<span class="badge badge-sm badge-error">{{ label }}</span>
+{% elif stage == "withdrawn" %}<span class="badge badge-sm badge-warning">{{ label }}</span>
+{% endif %}

@@ -94,7 +94,7 @@ The All Applications page shows a read-only table with these columns: candidate 
 
 - [ ] An application can be created from both the candidate page and the opening page. Each redirects back to where it started.
 - [ ] Pickers exclude closed openings and pairs that already have an application.
-- [ ] A second application for the same pair is refused by the rules and by the DB constraint (tests).
+- [ ] A second application for the same pair is refused by the rules (even when the form is bypassed) and by the DB constraint (tests).
 - [ ] Applying to a closed opening is refused (test).
 - [ ] A new application has stage Applied and exactly one StageChange (blank → Applied, correct user) (test).
 - [ ] The candidate detail page lists their applications with stage badges.

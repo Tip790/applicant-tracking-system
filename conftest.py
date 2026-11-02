@@ -1,5 +1,6 @@
 import pytest
 
+from hiring import rules
 from hiring.models import Candidate, JobOpening
 
 
@@ -35,3 +36,9 @@ def opening(db):
         location="Amarillo, TX",
         description="Build and maintain our Django services.",
     )
+
+
+@pytest.fixture
+def application(candidate, opening, staff_user):
+    """Ann Lee's application to Backend Developer, in Applied, recorded by staff_user."""
+    return rules.create_application(candidate, opening, staff_user)

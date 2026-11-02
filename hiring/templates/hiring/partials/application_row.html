@@ -1,0 +1,20 @@
+{% comment %}One row of the applications table. Pass `application`.{% endcomment %}
+<tr id="application-{{ application.pk }}" class="hover:bg-base-200 align-top">
+  <td>
+    <a href="{{ application.candidate.get_absolute_url }}" class="link link-hover font-medium">{{ application.candidate }}</a>
+    <div class="text-xs opacity-70">{{ application.candidate.email }}</div>
+  </td>
+  <td>
+    <a href="{{ application.opening.get_absolute_url }}" class="link link-hover">{{ application.opening }}</a>
+    {% include "hiring/partials/opening_status_badge.html" with opening=application.opening %}
+  </td>
+  <td>{{ application.candidate.get_source_display }}</td>
+  <td>{% include "hiring/partials/stage_badge.html" with stage=application.stage label=application.get_stage_display %}</td>
+  <td class="text-xs">
+    {% for change in application.stage_changes.all %}
+      <span title="{{ change.changed_at|date:'M j, Y g:i A' }} by {{ change.changed_by }}">{{ change.get_to_stage_display }}</span>{% if not forloop.last %} → {% endif %}
+    {% endfor %}
+  </td>
+  <td class="whitespace-nowrap">{{ application.stage_entered_at|timesince }}</td>
+  <td class="opacity-50">—</td>{# Actions dropdown arrives in Phase 4. #}
+</tr>

@@ -18,10 +18,7 @@
         <button type="submit" class="btn btn-sm btn-success">Reopen</button>
       </form>
     {% else %}
-      <form method="post" action="{% url 'hiring:opening_close' opening.pk %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-sm btn-outline btn-error">Close opening</button>
-      </form>
+      <a href="{% url 'hiring:opening_close' opening.pk %}" class="btn btn-sm btn-outline btn-error">Close opening</a>
     {% endif %}
   </div>
 </div>
@@ -44,10 +41,13 @@
   </div>
 </div>
 
-<h2 class="text-xl font-bold mb-2">Applications</h2>
-<div class="card bg-base-100 shadow">
-  <div class="card-body">
-    <p class="opacity-70">No applications yet.</p>
-  </div>
+<div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+  <h2 class="text-xl font-bold">Applications</h2>
+  {% if opening.is_closed %}
+    <span class="text-sm opacity-70">Closed openings don't accept new applications.</span>
+  {% else %}
+    <a href="{% url 'hiring:application_create' %}?opening={{ opening.pk }}" class="btn btn-primary btn-sm">+ Record application</a>
+  {% endif %}
 </div>
+{% include "hiring/partials/application_table.html" %}
 {% endblock %}

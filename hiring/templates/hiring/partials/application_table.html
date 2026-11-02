@@ -1,0 +1,23 @@
+{% comment %}The applications table, shared by All Applications and the opening page. Pass `applications`.{% endcomment %}
+<div class="card bg-base-100 shadow overflow-x-auto">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Candidate</th>
+        <th>Opening</th>
+        <th>Source</th>
+        <th>Stage</th>
+        <th>Stage history</th>
+        <th>Time in stage</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for application in applications %}
+        {% include "hiring/partials/application_row.html" %}
+      {% empty %}
+        <tr><td colspan="7" class="opacity-70">No applications found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

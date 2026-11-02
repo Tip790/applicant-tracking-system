@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Record application{% endblock %}
+
+{% block content %}
+{% if candidate %}
+  <a href="{{ candidate.get_absolute_url }}" class="link link-hover text-sm">← {{ candidate }}</a>
+  <h1 class="text-2xl font-bold mb-4">Record an application for {{ candidate }}</h1>
+{% else %}
+  <a href="{{ opening.get_absolute_url }}" class="link link-hover text-sm">← {{ opening }}</a>
+  <h1 class="text-2xl font-bold mb-4">Record an application to {{ opening }}</h1>
+{% endif %}
+
+<div class="card bg-base-100 shadow max-w-2xl">
+  <form method="post" class="card-body gap-4" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div role="alert" class="alert alert-error">
+        {% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}
+      </div>
+    {% endif %}
+
+    {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+    {% for field in form.visible_fields %}
+      <label class="flex flex-col gap-1 w-full">
+        <span class="text-sm font-medium">{{ field.label }}</span>
+        {{ field }}
+        {% for error in field.errors %}<span class="text-error text-sm">{{ error }}</span>{% endfor %}
+      </label>
+      {% if not field.field.queryset.exists %}
+        <p class="text-sm opacity-70">
+          {% if candidate %}There are no open openings this candidate hasn't already applied to.
+          {% else %}Every candidate has already applied to this opening.{% endif %}
+        </p>
+      {% endif %}
+    {% endfor %}
+
+    <p class="text-sm opacity-70">The application starts in the Applied stage.</p>
+
+    <div class="flex gap-2">
+      <button type="submit" class="btn btn-primary">Record application</button>
+      <a href="{% if candidate %}{{ candidate.get_absolute_url }}{% else %}{{ opening.get_absolute_url }}{% endif %}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

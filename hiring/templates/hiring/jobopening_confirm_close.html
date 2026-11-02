@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Close {{ opening }}{% endblock %}
+
+{% block content %}
+<a href="{{ opening.get_absolute_url }}" class="link link-hover text-sm">← {{ opening }}</a>
+<h1 class="text-2xl font-bold mb-4">Close {{ opening }}?</h1>
+
+<div class="card bg-base-100 shadow max-w-2xl">
+  <form method="post" class="card-body gap-4">
+    {% csrf_token %}
+    <p>Closing stops new applications to this opening.</p>
+    <div role="alert" class="alert {% if active_count %}alert-warning{% else %}alert-info{% endif %}">
+      <span>
+        {{ active_count }} active application{{ active_count|pluralize }}
+        {{ active_count|pluralize:"is,are" }} still in progress.
+        {% if active_count %}They will keep moving through the stages normally.{% endif %}
+      </span>
+    </div>
+    <div class="flex gap-2">
+      <button type="submit" class="btn btn-error">Close opening</button>
+      <a href="{{ opening.get_absolute_url }}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

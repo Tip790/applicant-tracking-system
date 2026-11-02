@@ -28,6 +28,40 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-02 — Phase 3: record applications and the All Applications table
+
+### Prompts
+1. `/implement @prd/applicant-tracking-system.md  @plans/applicant-tracking-system.md  implement Phase 3`
+2. `approved, go ahead add new test to the plan's acceptance criteria`
+3. `approved, go ahead`
+4. `approved, go ahead`
+5. `continue`
+6. `approved, go ahead`
+7. `continue`
+8. `approved, go ahead`
+9. `continue`
+10. `manual verification passed, go ahead`
+
+### Summary
+- **Outcome:** Phase 3 was built on top of Phase 2:
+  - `Application` model (candidate, opening, stage, timestamps) with a database constraint allowing one application per candidate and opening. `StageChange` model (from-stage, to-stage, who, when). A `Stage` choice list and an `ACTIVE_STAGES` list. Migration `0003`, plus admin registration with the stage history shown inline.
+  - `hiring/rules.py` gained `create_application` (saves the application in Applied and its first StageChange in one transaction), `application_refusal_reason` (refuses closed openings and duplicate pairs), the two picker querysets, `count_active_applications`, and a `RuleViolation` exception carrying a readable reason. A database `IntegrityError` from a simultaneous duplicate is turned into the same message.
+  - One `ApplicationForm` and `application_create` view at `/applications/new/?candidate=` or `?opening=`. The fixed side is a hidden field that accepts only that record. The other side is a picker of valid choices. Saving returns to the page you started from.
+  - `/openings/<pk>/close/` now shows a confirmation with the number of active applications on GET and closes on POST. The "Close opening" button became a link to it.
+  - Partials for the stage badge, the applications table and the table row. All Applications has name search and opening/stage/"Active only" filters. The opening page reuses the table, limited to that opening. The candidate page lists its applications with stage badges. Stage history and time in stage come from StageChange rows. The Actions column is a placeholder for Phase 4.
+  - 62 tests pass. Three behaviors were built test-first, each through an approved RED → GREEN cycle: a new application starts in Applied with exactly one StageChange, the rules refuse a duplicate pair even without the form, and the search and filters work alone and combined. Ordinary tests cover the DB constraint, the closed-opening refusal, the pickers, both redirects, tampered POSTs, the detail pages, the table columns, badge colors, history and time in stage, the close confirmation count, and login on the new pages.
+  - Ruff check and format are clean, there are no missing migrations, and the CSS build contains every badge color. The user confirmed manual verification in the browser.
+- **Deviations:**
+  - The user asked for the new TDD test to be added to the plan's acceptance criteria. Claude pointed out that all three behaviors were already marked "(test)" in the plan, so instead it added "(even when the form is bypassed)" to the duplicate-pair criterion, the one detail the plan didn't state.
+  - Claude made a few choices without asking: the badge color for each stage, cascading deletes on the application's foreign keys (so superusers can still delete records from admin), no "Record application" button on closed openings, a 404 when the record page is opened without a candidate or opening, and limiting the hidden fixed field to the one record from the URL.
+  - Search still matches first or last name separately (not "Ann Lee" as a full name), consistent with the user's Phase 1 choice.
+  - The user's own uncommitted edit to `CLAUDE.md`, made before the session, was again left out of the phase commit.
+- **Sideways:**
+  - Nothing failed. All three RED runs failed on assertions. For behaviors 1 and 2, Claude first wrote small stubs (a `create_application` that saved only the application, and an `application_refusal_reason` that always returned `None`) so the tests could fail on assertions instead of import or database errors.
+  - Claude first set the stages in the filter test with a hard-to-read `.__class__.objects` chain and replaced it with an `apply_at_stage` helper before running the test. It also moved two inline imports in the rules tests to the top of the file.
+  - Claude first used `PROTECT` on the application's foreign keys and switched to `CASCADE` before making the migration, because PROTECT would have blocked superusers from deleting candidates in admin.
+  - Ruff reformatted one file. The tests were re-run afterwards and still passed.
+
 ## 2026-11-02 — Phase 2: job openings and skills
 
 ### Prompts

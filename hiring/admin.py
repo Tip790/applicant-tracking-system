@@ -1,7 +1,7 @@
 from django.contrib import admin, messages
 from django.db import transaction
 
-from .models import Candidate, JobOpening, Skill
+from .models import Application, Candidate, JobOpening, Skill, StageChange
 
 
 @admin.register(Candidate)
@@ -47,3 +47,23 @@ class JobOpeningAdmin(admin.ModelAdmin):
     list_filter = ["status", "department"]
     search_fields = ["title", "department", "location"]
     filter_horizontal = ["skills"]
+
+
+class StageChangeInline(admin.TabularInline):
+    model = StageChange
+    extra = 0
+    readonly_fields = ["changed_at"]
+
+
+@admin.register(Application)
+class ApplicationAdmin(admin.ModelAdmin):
+    list_display = ["candidate", "opening", "stage", "created_at"]
+    list_filter = ["stage", "opening"]
+    search_fields = ["candidate__first_name", "candidate__last_name", "candidate__email"]
+    inlines = [StageChangeInline]
+
+
+@admin.register(StageChange)
+class StageChangeAdmin(admin.ModelAdmin):
+    list_display = ["application", "from_stage", "to_stage", "changed_by", "changed_at"]
+    list_filter = ["to_stage"]

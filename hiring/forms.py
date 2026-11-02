@@ -69,3 +69,44 @@ class JobOpeningForm(forms.ModelForm):
         if commit and new_skill:
             opening.skills.add(rules.get_or_create_skill(new_skill))
         return opening
+
+
+class ApplicationForm(forms.Form):
+    """Record an application. One side (candidate or opening) is fixed by the page it came from.
+
+    The fixed side becomes a hidden field; the other side is a picker that only offers
+    valid choices. The rules check the pair again in clean(), so a tampered POST is refused.
+    """
+
+    candidate = forms.ModelChoiceField(
+        queryset=Candidate.objects.all(),
+        widget=forms.Select(attrs={"class": "select w-full"}),
+    )
+    opening = forms.ModelChoiceField(
+        queryset=JobOpening.objects.all(),
+        widget=forms.Select(attrs={"class": "select w-full"}),
+    )
+
+    def __init__(self, *args, candidate=None, opening=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # The fixed side only accepts that one record, so a tampered hidden field is refused.
+        if candidate is not None:
+            self.fields["candidate"].queryset = Candidate.objects.filter(pk=candidate.pk)
+            self.fields["candidate"].initial = candidate.pk
+            self.fields["candidate"].widget = forms.HiddenInput()
+            self.fields["opening"].queryset = rules.openings_candidate_can_apply_to(candidate)
+        if opening is not None:
+            self.fields["opening"].queryset = JobOpening.objects.filter(pk=opening.pk)
+            self.fields["opening"].initial = opening.pk
+            self.fields["opening"].widget = forms.HiddenInput()
+            self.fields["candidate"].queryset = rules.candidates_who_can_apply_to(opening)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        candidate = cleaned_data.get("candidate")
+        opening = cleaned_data.get("opening")
+        if candidate and opening:
+            reason = rules.application_refusal_reason(candidate, opening)
+            if reason:
+                raise forms.ValidationError(reason)
+        return cleaned_data
