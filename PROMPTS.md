@@ -28,6 +28,41 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-02 — Phase 1: skeleton, login and candidates
+
+### Prompts
+1. `/implement @prd/applicant-tracking-system.md  @plans/applicant-tracking-system.md  implement Phase 1`
+2. `approved, go ahead`
+3. `approved, go ahead`
+4. `continue`
+5. `approved, go ahead`
+6. `continue`
+7. `approved, go ahead`
+8. `continue`
+9. `manual verification passed, go ahead`
+
+### Summary
+- **Outcome:** Phase 1 was built from an empty repo:
+  - A uv project (Django 6.1, django-tailwind-cli, pytest, pytest-django, ruff), a `config` project and a single `hiring` app.
+  - Tailwind + DaisyUI 5 through django-tailwind-cli (source CSS in `tailwind/source.css`), and HTMX 2.0.4 from unpkg with a checked SRI hash, on a shared `templates/base.html`.
+  - Login and logout use Django's auth views. Every page requires login through Django's `LoginRequiredMiddleware`. Login lands on a placeholder All Applications page, and `/` redirects there.
+  - `/admin/` is limited to superusers by overriding `admin.site.has_permission` in `config/urls.py`. Candidate is registered in admin.
+  - The `Candidate` model has a database constraint that keeps email unique ignoring case. Candidate list (search by name/email), detail, create and edit pages use generic class-based views.
+  - `hiring/rules.py` holds the first business rule, `find_candidate_by_email`. `CandidateForm.clean_email` uses it to show a "candidate already exists" error that links to the existing record.
+  - 22 tests pass. Three behaviors were built test-first, each through an approved RED → GREEN cycle: the database constraint, the linked duplicate-email error and candidate search. The other tests cover login on every page, the login and logout redirects, admin access and candidate create/edit/view.
+  - Ruff check and format are clean, and the README has setup instructions. The user confirmed manual verification in the browser.
+- **Deviations:**
+  - The user approved every TDD selection and test without changes.
+  - Claude pointed out that search matches each field separately, so a full name like "Ann Lee" won't match, and offered to add it. The user didn't ask for it, so it was left out.
+  - The built CSS and the downloaded Tailwind binary are git-ignored, so a fresh clone needs one `tailwind build` (documented in the README). Claude made this choice without asking.
+- **Sideways:**
+  - `uv add` first failed with a TLS "invalid peer certificate: UnknownIssuer" error. It worked with `--system-certs`.
+  - A `cd` into the installed tailwind package briefly changed the working directory. Claude noticed and changed back.
+  - The first source CSS location (`assets/css/source.css`) triggered a django-tailwind-cli warning because it was inside the static folder. It was moved to `tailwind/source.css` before the first test went green.
+  - The first `tailwind build` failed with "Access is denied" while running the just-downloaded CLI (probably Windows Defender scanning it). A retry worked.
+  - The build used DaisyUI 5, which dropped `input-bordered`, `select-bordered`, `textarea-bordered`, `form-control`, `label-text` and the row `hover` class. Claude found this by checking the built CSS and replaced the classes before manual verification.
+  - Smaller slips: a diagnostic command run against the not-yet-migrated dev database failed, and the PowerShell smoke test's redirect checks raised PowerShell 5 errors. Neither affected the code, and tests cover the redirects.
+
 ## 2026-11-02 — Phased implementation plan from the PRD
 
 ### Prompts

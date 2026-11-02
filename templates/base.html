@@ -1,0 +1,38 @@
+{% load static tailwind_cli %}
+<!doctype html>
+<html lang="en" data-theme="corporate">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Applicant Tracking{% endblock %} · ATS</title>
+  {% tailwind_css %}
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+</head>
+<body class="min-h-screen bg-base-200" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  {% if user.is_authenticated %}
+    <div class="navbar bg-base-100 shadow-sm px-4">
+      <div class="flex-1 gap-2">
+        <a href="{% url 'hiring:application_list' %}" class="btn btn-ghost text-lg">ATS</a>
+        <a href="{% url 'hiring:application_list' %}" class="btn btn-ghost btn-sm">All Applications</a>
+        <a href="{% url 'hiring:candidate_list' %}" class="btn btn-ghost btn-sm">Candidates</a>
+      </div>
+      <div class="flex-none items-center gap-2">
+        <span class="text-sm opacity-70">{{ user.get_username }}</span>
+        <form method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline btn-sm">Log out</button>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
+  <main class="max-w-6xl mx-auto p-4 md:p-6">
+    {% for message in messages %}
+      <div role="alert" class="alert {% if message.tags == 'error' %}alert-error{% elif message.tags == 'success' %}alert-success{% else %}alert-info{% endif %} mb-4">
+        <span>{{ message }}</span>
+      </div>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

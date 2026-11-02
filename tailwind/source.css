@@ -1,0 +1,6 @@
+@import "tailwindcss";
+@plugin "daisyui";
+
+/* Scan the project's templates for class names. */
+@source "../templates";
+@source "../hiring/templates";

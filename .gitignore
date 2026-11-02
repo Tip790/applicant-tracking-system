@@ -205,6 +205,10 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# Tailwind (django-tailwind-cli): downloaded CLI binary and built stylesheet
+.django_tailwind_cli/
+assets/css/tailwind.css
+
 # Ruff stuff:
 .ruff_cache/
 
