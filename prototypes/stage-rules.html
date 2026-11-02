@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hiring Stage Rules</title>
+<!-- THROWAWAY PROTOTYPE. Not production code. Answers one design question, then gets deleted. -->
+<style>
+  :root {
+    --bg: #f7f7f9; --card: #fff; --text: #1d1d24; --muted: #6b6b78; --line: #e3e3ea;
+    --accent: #4f46e5; --accent-soft: #eef0ff; --ok: #157347; --ok-soft: #e7f5ee;
+    --bad: #b42318; --bad-soft: #fdecea; --final: #f1f1f4;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  p { margin: 0 0 8px; }
+  .muted { color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin-top: 16px; }
+  .question { background: var(--accent-soft); border-color: #d6d9ff; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  label.opt { display: block; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; cursor: pointer; }
+  label.opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  label.opt small { display: block; color: var(--muted); margin-left: 22px; }
+  button { font: inherit; border: 1px solid var(--line); background: #fff; border-radius: 7px; padding: 5px 10px; cursor: pointer; margin: 2px; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.blocked { color: #a0a0ad; border-style: dashed; }
+  button:disabled { opacity: .45; cursor: default; }
+  .msg { padding: 10px 12px; border-radius: 8px; margin-top: 12px; font-weight: 500; }
+  .msg.ok { background: var(--ok-soft); color: var(--ok); }
+  .msg.bad { background: var(--bad-soft); color: var(--bad); }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 99px; font-size: 13px; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
+  .badge.final { background: var(--final); color: var(--muted); }
+  .badge.hired { background: var(--ok-soft); color: var(--ok); }
+  .badge.gone { background: var(--bad-soft); color: var(--bad); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 6px; border-top: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 13px; color: var(--muted); font-weight: 600; }
+  .history { font-size: 13px; color: var(--muted); }
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; font-weight: 500; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  .tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; margin: 0; padding: 8px 10px; }
+  .tabs button.on { border-bottom-color: var(--accent); color: var(--accent); font-weight: 600; }
+  ol.steps { padding-left: 22px; }
+  ol.steps li { margin: 4px 0; }
+  .done { color: var(--ok); }
+  ul.log { margin: 0; padding-left: 18px; font-size: 13px; max-height: 220px; overflow: auto; }
+  ul.log li.bad { color: var(--bad); }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Hiring Stage Rules: Prototype</h1>
+  <p class="muted">Throwaway demo for the Applicant Tracking System planning interview. Nothing here is saved.</p>
+
+  <div class="card question">
+    <h2>The question this answers</h2>
+    <p><strong>Which moves between hiring stages should staff be allowed to make, and how should those rules interact with archiving or deleting a candidate?</strong></p>
+    <p>Pick a rule set below, then press buttons or run the guided scenarios. Watch for moments where you think "that shouldn't be possible" or "that should be allowed." Those moments are the decisions we need to make. You can switch rules at any time without losing the current state.</p>
+  </div>
+
+  <div class="card">
+    <h2>1. Rules in effect</h2>
+    <div class="grid">
+      <div>
+        <p><strong>Moving between stages</strong></p>
+        <label class="opt"><input type="radio" name="transitions" value="strict"> Strict
+          <small>One step forward at a time, or out to Rejected / Withdrawn. No skipping, no going back. Final stages are locked.</small></label>
+        <label class="opt"><input type="radio" name="transitions" value="flexible" checked> Flexible
+          <small>Jump forward or back between active stages. Hired only from Offer. A Rejected / Withdrawn application can be reopened to the stage it was in. Hired is final.</small></label>
+        <label class="opt"><input type="radio" name="transitions" value="free"> Free
+          <small>Any stage to any stage, no restrictions.</small></label>
+      </div>
+      <div>
+        <p><strong>Removing candidates (Question 4)</strong></p>
+        <label class="opt"><input type="radio" name="lifecycle" value="archiveOnly"> Option 1: Archive only
+          <small>No delete button. Only a superuser can delete, in Django admin.</small></label>
+        <label class="opt"><input type="radio" name="lifecycle" value="deleteIfNoApps" checked> Option 2: Delete only if no applications
+          <small>Mistaken entries can be deleted. Anyone who has applied can only be archived.</small></label>
+        <label class="opt"><input type="radio" name="lifecycle" value="fullDelete"> Option 3: Full delete
+          <small>Delete anyone. Their applications and history are deleted too.</small></label>
+        <label class="opt"><input type="checkbox" name="blockArchive" checked> Block archiving while an application is active
+          <small>Active = Applied, Screening, Interview, Final Review, Offer.</small></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2. Current state</h2>
+    <div id="state"></div>
+    <div id="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>3. Free play</h2>
+    <p class="muted">Use the stage buttons in the table above to move an application. Solid buttons are allowed under the current rules. Dashed buttons are not, but you can still click one to see why.</p>
+    <div id="freeplay"></div>
+  </div>
+
+  <div class="card">
+    <h2>4. Guided scenarios</h2>
+    <p class="muted">Opening a scenario resets to a fresh candidate. Click each step in order. Try the same scenario under different rules.</p>
+    <div class="tabs" id="tabs"></div>
+    <div id="scenario"></div>
+  </div>
+
+  <div class="card">
+    <h2>Activity log</h2>
+    <ul class="log" id="log"></ul>
+  </div>
+</main>
+
+<script>
+/* =====================================================================
+   PURE MODEL: no DOM in here. (state, action, rules) -> result
+   ===================================================================== */
+const Model = (() => {
+  const STAGES = ["Applied", "Screening", "Interview", "Final Review", "Offer", "Hired", "Rejected", "Withdrawn"];
+  const ACTIVE = ["Applied", "Screening", "Interview", "Final Review", "Offer"];
+  const JOBS = ["Backend Developer", "Data Analyst", "HR Coordinator"];
+  const isActive = s => ACTIVE.includes(s);
+
+  function initialState() {
+    return {
+      candidate: { name: "Ana Lopez", email: "ana@example.com", status: "active" }, // active | archived | deleted
+      applications: [],   // { job, stage, history: [stage, ...] }
+    };
+  }
+
+  const clone = s => JSON.parse(JSON.stringify(s));
+  const no = reason => ({ ok: false, reason });
+  const yes = { ok: true };
+  const findApp = (state, job) => state.applications.find(a => a.job === job);
+  const activeApps = state => state.applications.filter(a => isActive(a.stage));
+
+  function checkMove(state, job, to, rules) {
+    const c = state.candidate;
+    const app = findApp(state, job);
+    if (c.status === "deleted") return no("This candidate was deleted, so there is nothing left to move.");
+    if (!app) return no(`There is no application for ${job}.`);
+    if (c.status === "archived") return no("The candidate is archived, so their applications are read-only. Unarchive first.");
+    const from = app.stage;
+    if (to === from) return no(`The application is already in ${from}.`);
+
+    if (rules.transitions === "free") return yes;
+
+    if (rules.transitions === "strict") {
+      if (!isActive(from)) return no(`${from} is a final stage under Strict rules. Nothing can move out of it.`);
+      if (to === "Rejected" || to === "Withdrawn") return yes;
+      const next = STAGES[STAGES.indexOf(from) + 1];
+      if (to === next) return yes;
+      return no(`Strict rules: from ${from} the only step forward is ${next}. No skipping, no going back.`);
+    }
+
+    // flexible
+    if (from === "Hired") return no("Hired is final. A hired application cannot be moved.");
+    if (from === "Rejected" || from === "Withdrawn") {
+      const prev = app.history[app.history.length - 2];
+      if (to === prev) return yes;
+      return no(`A ${from} application can only be reopened to the stage it came from (${prev}).`);
+    }
+    if (to === "Hired" && from !== "Offer") return no("Someone can only be marked Hired from the Offer stage.");
+    return yes;
+  }
+
+  function checkApply(state, job) {
+    const c = state.candidate;
+    if (c.status === "deleted") return no("This candidate was deleted.");
+    if (c.status === "archived") return no("The candidate is archived. Unarchive first before adding a new application.");
+    const existing = findApp(state, job);
+    if (existing) return no(`The candidate already has an application for ${job} (currently ${existing.stage}). Only one application per opening is allowed.`);
+    return yes;
+  }
+
+  function checkArchive(state, rules) {
+    const c = state.candidate;
+    if (c.status === "deleted") return no("This candidate was deleted.");
+    if (c.status === "archived") return no("Already archived.");
+    const active = activeApps(state);
+    if (rules.blockArchive && active.length)
+      return no(`Can't archive: still active in ${active.map(a => `${a.job} (${a.stage})`).join(", ")}. Move these to Hired, Rejected, or Withdrawn first.`);
+    return yes;
+  }
+
+  function checkUnarchive(state) {
+    if (state.candidate.status !== "archived") return no("The candidate is not archived.");
+    return yes;
+  }
+
+  function checkDelete(state, rules) {
+    if (state.candidate.status === "deleted") return no("Already deleted.");
+    if (rules.lifecycle === "archiveOnly")
+      return no("Staff can't delete candidates in the app. Archive instead. A superuser can permanently delete in Django admin.");
+    const n = state.applications.length;
+    if (rules.lifecycle === "deleteIfNoApps" && n > 0)
+      return no(`Can't delete: the candidate has ${n} application${n > 1 ? "s" : ""} with hiring history. Archive instead.`);
+    return yes;
+  }
+
+  function check(state, action, rules) {
+    switch (action.type) {
+      case "move": return checkMove(state, action.job, action.to, rules);
+      case "apply": return checkApply(state, action.job);
+      case "archive": return checkArchive(state, rules);
+      case "unarchive": return checkUnarchive(state);
+      case "delete": return checkDelete(state, rules);
+    }
+  }
+
+  // Returns { state, ok, message }
+  function dispatch(state, action, rules) {
+    const verdict = check(state, action, rules);
+    if (!verdict.ok) return { state, ok: false, message: verdict.reason };
+    const s = clone(state);
+    switch (action.type) {
+      case "move": {
+        const app = findApp(s, action.job);
+        const from = app.stage;
+        app.stage = action.to;
+        app.history.push(action.to);
+        return { state: s, ok: true, message: `${action.job}: moved ${from} → ${action.to}.` };
+      }
+      case "apply":
+        s.applications.push({ job: action.job, stage: "Applied", history: ["Applied"] });
+        return { state: s, ok: true, message: `New application for ${action.job}, starting at Applied.` };
+      case "archive": {
+        s.candidate.status = "archived";
+        const hidden = activeApps(s).length;
+        return { state: s, ok: true, message: "Candidate archived and hidden from the main list." +
+          (hidden ? ` Warning: ${hidden} active application(s) are now hidden too.` : "") };
+      }
+      case "unarchive":
+        s.candidate.status = "active";
+        return { state: s, ok: true, message: "Candidate unarchived and back in the main list." };
+      case "delete": {
+        const n = s.applications.length;
+        s.candidate.status = "deleted";
+        s.applications = [];
+        return { state: s, ok: true, message: n
+          ? `Candidate permanently deleted, along with ${n} application(s) and their full history.`
+          : "Candidate permanently deleted (they had no applications)." };
+      }
+    }
+  }
+
+  return { STAGES, ACTIVE, JOBS, isActive, initialState, check, dispatch, activeApps };
+})();
+
+/* =====================================================================
+   SCENARIOS: plain data
+   ===================================================================== */
+const mv = (job, to) => ({ type: "move", job, to });
+const ap = job => ({ type: "apply", job });
+const SCENARIOS = [
+  { title: "Happy path",
+    text: "The candidate applies and moves through every stage to Hired, then gets archived. This should work under every rule set. If it doesn't, the rules are broken.",
+    steps: [ap("Backend Developer"), mv("Backend Developer", "Screening"), mv("Backend Developer", "Interview"),
+            mv("Backend Developer", "Final Review"), mv("Backend Developer", "Offer"), mv("Backend Developer", "Hired"), { type: "archive" }] },
+  { title: "Skipping a stage",
+    text: "A strong applicant skips Screening and goes straight to Interview, then staff move them back. Strict refuses both moves. Is that what real recruiters want?",
+    steps: [ap("Data Analyst"), mv("Data Analyst", "Interview"), mv("Data Analyst", "Screening")] },
+  { title: "Rejected by mistake",
+    text: "Someone clicks Rejected on the wrong applicant and needs to undo it. Compare: Strict locks it forever, Flexible lets you undo only back to Interview, and Free lets it jump straight to Offer.",
+    steps: [ap("Backend Developer"), mv("Backend Developer", "Screening"), mv("Backend Developer", "Interview"),
+            mv("Backend Developer", "Rejected"), mv("Backend Developer", "Offer"), mv("Backend Developer", "Interview")] },
+  { title: "Hired out of nowhere",
+    text: "A brand-new application is moved straight to Hired. Only Free allows it. That shows the risk of having no rules: one misclick skips the entire process.",
+    steps: [ap("HR Coordinator"), mv("HR Coordinator", "Hired")] },
+  { title: "Archiving mid-interview",
+    text: "The candidate has two active applications and staff try to archive them. With the blocking rule on, archiving is refused until both applications are closed. Turn the checkbox off and run it again to watch the candidate disappear while still interviewing.",
+    steps: [ap("Backend Developer"), ap("Data Analyst"), mv("Backend Developer", "Screening"), mv("Backend Developer", "Interview"),
+            { type: "archive" }, mv("Backend Developer", "Withdrawn"), mv("Data Analyst", "Rejected"), { type: "archive" }, ap("HR Coordinator")] },
+  { title: "Applying again later",
+    text: "Rejected for Data Analyst in spring, the candidate applies to the same opening again in the fall. The one-application-per-opening rule blocks a second application. The only way back is to reopen the old one, which Strict forbids. Is that acceptable?",
+    steps: [ap("Data Analyst"), mv("Data Analyst", "Rejected"), ap("Data Analyst"), mv("Data Analyst", "Applied")] },
+  { title: "Archived, then reopened",
+    text: "A rejected candidate is archived, then staff want to reopen the application. Archived candidates are read-only, so they must be unarchived first.",
+    steps: [ap("Backend Developer"), mv("Backend Developer", "Rejected"), { type: "archive" }, mv("Backend Developer", "Applied"),
+            { type: "unarchive" }, mv("Backend Developer", "Applied")] },
+  { title: "Deleting a typo",
+    text: "Staff created this candidate by mistake and nobody has applied yet. Option 1 refuses the delete. Options 2 and 3 allow it.",
+    steps: [{ type: "delete" }] },
+  { title: "Deleting someone with history",
+    text: "The candidate has an application in progress and staff try to delete them. Only Option 3 allows it, and it destroys the hiring history along with the candidate.",
+    steps: [ap("Backend Developer"), mv("Backend Developer", "Screening"), { type: "delete" }] },
+];
+
+/* =====================================================================
+   PAGE SHELL: reads rules, renders state, wires buttons
+   ===================================================================== */
+let state = Model.initialState();
+let lastMsg = null;
+let log = [];
+let activeTab = 0;
+let stepIndex = 0;
+
+const $ = s => document.querySelector(s);
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function rules() {
+  return {
+    transitions: document.querySelector('input[name="transitions"]:checked').value,
+    lifecycle: document.querySelector('input[name="lifecycle"]:checked').value,
+    blockArchive: document.querySelector('input[name="blockArchive"]').checked,
+  };
+}
+
+function describe(a) {
+  switch (a.type) {
+    case "apply": return `Apply to ${a.job}`;
+    case "move": return `Move ${a.job} → ${a.to}`;
+    case "archive": return "Archive candidate";
+    case "unarchive": return "Unarchive candidate";
+    case "delete": return "Delete candidate";
+  }
+}
+
+function act(action) {
+  const r = Model.dispatch(state, action, rules());
+  state = r.state;
+  lastMsg = r;
+  log.unshift({ ok: r.ok, text: `${describe(action)}: ${r.message}` });
+  render();
+  return r;
+}
+
+function reset() { state = Model.initialState(); lastMsg = null; log.unshift({ ok: true, text: "— Reset to a fresh candidate —" }); }
+
+function stageBadge(s) {
+  const cls = s === "Hired" ? "hired" : Model.isActive(s) ? "" : "final";
+  return `<span class="badge ${cls}">${esc(s)}</span>`;
+}
+
+function renderState() {
+  const c = state.candidate, R = rules();
+  const statusBadge = c.status === "active" ? `<span class="badge">Active</span>`
+    : c.status === "archived" ? `<span class="badge final">Archived</span>` : `<span class="badge gone">Deleted</span>`;
+  const active = Model.activeApps(state).length;
+  let html = `<dl class="facts">
+    <dt>Candidate</dt><dd>${esc(c.name)} &lt;${esc(c.email)}&gt;</dd>
+    <dt>Status</dt><dd>${statusBadge}</dd>
+    <dt>In main candidate list?</dt><dd>${c.status === "active" ? "Yes" : "No"}</dd>
+    <dt>Applications</dt><dd>${state.applications.length} total, ${active} active</dd>
+  </dl>`;
+  if (c.status === "archived" && active)
+    html += `<div class="msg bad">This archived candidate still has ${active} active application(s), so they are hidden mid-process.</div>`;
+
+  if (state.applications.length) {
+    html += `<div class="scroll"><table><thead><tr><th>Job opening</th><th>Stage now</th><th>History</th><th>Move to…</th></tr></thead><tbody>`;
+    for (const a of state.applications) {
+      const btns = Model.STAGES.filter(s => s !== a.stage).map(s => {
+        const ok = Model.check(state, { type: "move", job: a.job, to: s }, R).ok;
+        return `<button class="${ok ? "primary" : "blocked"}" data-move="${esc(a.job)}|${esc(s)}">${esc(s)}</button>`;
+      }).join("");
+      html += `<tr><td>${esc(a.job)}</td><td>${stageBadge(a.stage)}</td>
+        <td class="history">${a.history.map(esc).join(" → ")}</td><td>${btns}</td></tr>`;
+    }
+    html += `</tbody></table></div>`;
+  } else if (c.status !== "deleted") {
+    html += `<p class="muted" style="margin-top:12px">No applications yet.</p>`;
+  }
+  $("#state").innerHTML = html;
+  $("#msg").innerHTML = lastMsg ? `<div class="msg ${lastMsg.ok ? "ok" : "bad"}">${lastMsg.ok ? "✓ " : "✗ Refused: "}${esc(lastMsg.message)}</div>` : "";
+}
+
+function renderFreeplay() {
+  const R = rules();
+  const btn = (action, label) => {
+    const ok = Model.check(state, action, R).ok;
+    return `<button class="${ok ? "" : "blocked"}" data-act='${esc(JSON.stringify(action))}'>${esc(label)}</button>`;
+  };
+  $("#freeplay").innerHTML =
+    Model.JOBS.map(j => btn({ type: "apply", job: j }, `Apply to ${j}`)).join("") + "<br>" +
+    btn({ type: "archive" }, "Archive candidate") + btn({ type: "unarchive" }, "Unarchive candidate") +
+    btn({ type: "delete" }, "Delete candidate") +
+    ` <button data-reset="1">Reset</button>`;
+}
+
+function renderTabs() {
+  $("#tabs").innerHTML = SCENARIOS.map((s, i) => `<button class="${i === activeTab ? "on" : ""}" data-tab="${i}">${esc(s.title)}</button>`).join("");
+  const sc = SCENARIOS[activeTab];
+  const steps = sc.steps.map((a, i) => {
+    if (i < stepIndex) return `<li class="done">✓ ${esc(describe(a))}</li>`;
+    return `<li><button ${i === stepIndex ? 'class="primary"' : "disabled"} data-step="${i}">${esc(describe(a))}</button></li>`;
+  }).join("");
+  $("#scenario").innerHTML = `<p>${esc(sc.text)}</p><ol class="steps">${steps}</ol>
+    ${stepIndex >= sc.steps.length ? `<p class="done">Scenario complete. Switch rules above and press Restart to compare.</p>` : ""}
+    <button data-restart="1">Restart scenario</button>`;
+}
+
+function renderLog() {
+  $("#log").innerHTML = log.map(l => `<li class="${l.ok ? "" : "bad"}">${esc(l.text)}</li>`).join("");
+}
+
+function render() { renderState(); renderFreeplay(); renderTabs(); renderLog(); }
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("button");
+  if (!t) return;
+  if (t.dataset.move) { const [job, to] = t.dataset.move.split("|"); act({ type: "move", job, to }); }
+  else if (t.dataset.act) act(JSON.parse(t.dataset.act));
+  else if (t.dataset.reset) { reset(); render(); }
+  else if (t.dataset.tab) { activeTab = +t.dataset.tab; stepIndex = 0; reset(); render(); }
+  else if (t.dataset.restart) { stepIndex = 0; reset(); render(); }
+  else if (t.dataset.step) { const i = +t.dataset.step; if (i === stepIndex) { stepIndex++; act(SCENARIOS[activeTab].steps[i]); } }
+});
+document.addEventListener("change", e => { if (e.target.name) { lastMsg = null; render(); } });
+
+render();
+</script>
+</body>
+</html>

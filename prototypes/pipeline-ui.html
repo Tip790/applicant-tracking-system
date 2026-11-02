@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipeline Screen Variants</title>
+<!-- THROWAWAY UI PROTOTYPE. Uses Tailwind + DaisyUI from CDN only. Not production code. -->
+<link href="https://cdn.jsdelivr.net/npm/daisyui@5.0.0/daisyui.css" rel="stylesheet" type="text/css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.0.0"></script>
+<style>
+  /* Variant switcher: deliberately plain so it doesn't look like part of the design */
+  #switcher { position: fixed; right: 12px; bottom: 12px; z-index: 100; background: #111; color: #fff;
+    font: 13px/1.2 ui-monospace, monospace; border-radius: 8px; padding: 6px; display: flex; gap: 6px; align-items: center;
+    box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+  #switcher button { background: #333; color: #fff; border: 0; border-radius: 5px; padding: 6px 10px; cursor: pointer; font: inherit; }
+  #switcher button:hover { background: #555; }
+  #switcher .label { padding: 0 6px; min-width: 210px; text-align: center; }
+  #reqlog { position: fixed; left: 12px; bottom: 12px; z-index: 100; background: #111; color: #9fe39f;
+    font: 12px/1.4 ui-monospace, monospace; border-radius: 8px; padding: 8px 10px; max-width: min(520px, calc(100vw - 24px));
+    box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+  #reqlog .err { color: #ff9b9b; }
+  .drop-ok { outline: 2px dashed oklch(0.65 0.18 150); outline-offset: -2px; }
+  .drop-no { opacity: .35; }
+  .flash { animation: flash 1.2s ease-out; }
+  @keyframes flash { from { background: oklch(0.93 0.08 150); } to { background: transparent; } }
+  body { padding-bottom: 90px; }
+</style>
+</head>
+<body class="bg-base-200 min-h-screen">
+
+<!-- Shared page shell (constant across variants) -->
+<div class="navbar bg-base-100 shadow-sm px-4">
+  <div class="flex-1 gap-2">
+    <span class="text-lg font-bold">Applicant Tracker</span>
+    <span class="badge badge-warning badge-sm">prototype</span>
+  </div>
+  <ul class="menu menu-horizontal px-1 hidden sm:flex">
+    <li><a class="menu-active">Openings</a></li><li><a>Candidates</a></li><li><a>Applications</a></li>
+  </ul>
+</div>
+
+<main class="p-4 max-w-[1400px] mx-auto">
+  <div id="view"></div>
+</main>
+
+<div id="reqlog">Simulated HTMX requests appear here.</div>
+<div id="switcher">
+  <button id="prev" title="Previous (←)">←</button>
+  <span class="label" id="vlabel"></span>
+  <button id="next" title="Next (→)">→</button>
+</div>
+
+<script>
+/* ---------------- Sample data + Flexible stage rules (agreed in Question 5) ---------------- */
+const STAGES = ["Applied", "Screening", "Interview", "Final Review", "Offer", "Hired", "Rejected", "Withdrawn"];
+const ACTIVE = STAGES.slice(0, 5);
+const FINAL = ["Hired", "Rejected", "Withdrawn"];
+const OPENINGS = [
+  { id: 1, title: "Backend Developer", dept: "Engineering", status: "open" },
+  { id: 2, title: "Data Analyst", dept: "Finance", status: "open" },
+  { id: 3, title: "HR Coordinator", dept: "People", status: "closed" },
+];
+const seed = [
+  ["Ana Lopez", 1, "Interview", "Referral"], ["Marcus Reed", 1, "Applied", "Website"], ["Priya Shah", 1, "Screening", "Job Board"],
+  ["Tom Becker", 1, "Applied", "Job Board"], ["Lena Ortiz", 1, "Final Review", "Referral"], ["Sam Okafor", 1, "Offer", "Website"],
+  ["Jin Park", 1, "Rejected", "Job Board"], ["Grace Liu", 1, "Screening", "Other"], ["Diego Ramos", 1, "Withdrawn", "Website"],
+  ["Ana Lopez", 2, "Applied", "Referral"], ["Fatima Noor", 2, "Interview", "Job Board"], ["Owen Hughes", 2, "Screening", "Website"],
+  ["Ruth Adeyemi", 2, "Hired", "Referral"], ["Kai Nakamura", 2, "Applied", "Job Board"],
+  ["Ben Carter", 3, "Final Review", "Website"], ["Mia Rossi", 3, "Rejected", "Job Board"], ["Leo Martin", 3, "Interview", "Referral"],
+];
+let apps = seed.map(([name, opening, stage, source], i) => {
+  const idx = STAGES.indexOf(stage);
+  const history = FINAL.includes(stage) ? ["Applied", "Screening", stage] : STAGES.slice(0, idx + 1);
+  return { id: 100 + i, name, email: name.toLowerCase().replace(" ", ".") + "@example.com", opening, stage, history, source, days: (i * 7) % 19 + 1 };
+});
+
+function allowed(app) {
+  const from = app.stage;
+  if (from === "Hired") return [];
+  if (from === "Rejected" || from === "Withdrawn") return [app.history[app.history.length - 2]];
+  return STAGES.filter(s => s !== from && (s !== "Hired" || from === "Offer"));
+}
+function reason(app, to) {
+  if (app.stage === "Hired") return "Hired is final.";
+  if (FINAL.includes(app.stage)) return `Can only reopen to ${app.history[app.history.length - 2]}.`;
+  if (to === "Hired") return "Hired is only reachable from Offer.";
+  return "Not allowed.";
+}
+
+let lastMovedId = null;
+function move(id, to) {
+  const app = apps.find(a => a.id === id);
+  if (!app || !to) return;
+  const ok = allowed(app).includes(to);
+  const req = `POST /applications/${id}/move/  stage=${to}`;
+  if (!ok) {
+    logReq(`${req}  →  422  "${reason(app, to)}"`, true);
+  } else {
+    const from = app.stage;
+    app.stage = to; app.history.push(to); app.days = 0; lastMovedId = id;
+    logReq(`${req}  →  200  swapped fragment  (${app.name}: ${from} → ${to})`);
+  }
+  render();
+}
+function logReq(text, err) {
+  document.getElementById("reqlog").innerHTML = `<span class="${err ? "err" : ""}">${text}</span>`;
+}
+
+/* ---------------- Shared helpers ---------------- */
+let currentOpening = 1;
+let selectedApp = 100;
+const tableFilters = { opening: "all", stage: "all", q: "" };
+const opening = id => OPENINGS.find(o => o.id === id);
+const appsFor = (oid, stage) => apps.filter(a => a.opening === oid && (!stage || a.stage === stage));
+function stageBadge(s, size = "badge-sm") {
+  const cls = s === "Hired" ? "badge-success" : s === "Rejected" ? "badge-error badge-soft" : s === "Withdrawn" ? "badge-ghost" : s === "Offer" ? "badge-accent" : "badge-primary badge-soft";
+  return `<span class="badge ${size} ${cls}">${s}</span>`;
+}
+function moveSelect(app, extra = "") {
+  const opts = allowed(app);
+  if (!opts.length) return `<span class="text-xs opacity-60">Final</span>`;
+  return `<select class="select select-xs ${extra}" onchange="move(${app.id}, this.value)">
+    <option value="">Move to…</option>${opts.map(s => `<option>${s}</option>`).join("")}</select>`;
+}
+function openingTabs() {
+  return `<div role="tablist" class="tabs tabs-box bg-base-100 mb-4 w-fit flex-wrap">${OPENINGS.map(o =>
+    `<a role="tab" class="tab ${o.id === currentOpening ? "tab-active" : ""}" onclick="currentOpening=${o.id}; render()">${o.title}
+      ${o.status === "closed" ? `<span class="badge badge-xs badge-neutral ml-2">closed</span>` : ""}</a>`).join("")}</div>`;
+}
+function openingHeader() {
+  const o = opening(currentOpening);
+  const active = apps.filter(a => a.opening === o.id && ACTIVE.includes(a.stage)).length;
+  return `<div class="flex flex-wrap items-end justify-between gap-2 mb-3">
+    <div><h1 class="text-2xl font-bold">${o.title}</h1>
+      <p class="text-sm opacity-70">${o.dept} · ${o.status === "open" ? "Open" : `Closed, ${active} still active`} · ${appsFor(o.id).length} applications</p></div>
+    <div class="flex gap-2"><button class="btn btn-sm">Edit opening</button>
+      <button class="btn btn-sm ${o.status === "open" ? "" : "btn-disabled"}">+ Add application</button></div></div>`;
+}
+
+/* ---------------- Variant A: Kanban board, dropdown on each card ---------------- */
+function renderA() {
+  const col = (stage) => {
+    const items = appsFor(currentOpening, stage);
+    return `<div class="bg-base-100 rounded-box p-3 w-64 shrink-0">
+      <div class="flex justify-between items-center mb-2"><h3 class="font-semibold">${stage}</h3><span class="badge badge-sm">${items.length}</span></div>
+      <div class="flex flex-col gap-2">${items.map(a => `
+        <div class="card card-border bg-base-100 ${a.id === lastMovedId ? "flash" : ""}"><div class="card-body p-3 gap-1">
+          <div class="font-medium">${a.name}</div>
+          <div class="text-xs opacity-60">${a.source} · ${a.days}d in stage</div>
+          <div class="mt-1">${moveSelect(a, "w-full")}</div></div></div>`).join("") || `<p class="text-xs opacity-50">Empty</p>`}</div></div>`;
+  };
+  const finals = FINAL.map(s => {
+    const items = appsFor(currentOpening, s);
+    return `<details class="collapse collapse-arrow bg-base-200 mb-2"><summary class="collapse-title text-sm font-semibold py-2 min-h-0">${s} (${items.length})</summary>
+      <div class="collapse-content text-sm flex flex-col gap-2">${items.map(a => `<div class="${a.id === lastMovedId ? "flash" : ""}">
+        <div>${a.name}</div>${moveSelect(a, "w-full")}</div>`).join("") || "<span class='opacity-50'>None</span>"}</div></details>`;
+  }).join("");
+  return openingTabs() + openingHeader() +
+    `<div class="flex gap-3 overflow-x-auto pb-2">${ACTIVE.map(col).join("")}
+      <div class="bg-base-100 rounded-box p-3 w-60 shrink-0"><h3 class="font-semibold mb-2">Closed out</h3>${finals}</div></div>`;
+}
+
+/* ---------------- Variant B: Board with drag-and-drop ---------------- */
+let dragging = null;
+function renderB() {
+  const col = (stage) => {
+    const items = appsFor(currentOpening, stage);
+    const narrow = FINAL.includes(stage);
+    return `<div class="bg-base-100 rounded-box p-3 ${narrow ? "w-44" : "w-60"} shrink-0 min-h-[380px]" data-stage="${stage}"
+        ondragover="event.preventDefault()" ondrop="dropOn('${stage}')">
+      <div class="flex justify-between items-center mb-2"><h3 class="font-semibold text-sm">${stage}</h3><span class="badge badge-sm">${items.length}</span></div>
+      <div class="flex flex-col gap-2">${items.map(a => `
+        <div draggable="true" ondragstart="startDrag(${a.id})" ondragend="endDrag()"
+          class="card card-border bg-base-100 cursor-grab active:cursor-grabbing ${a.id === lastMovedId ? "flash" : ""} ${narrow ? "opacity-80" : ""}">
+          <div class="card-body p-3 gap-0"><div class="font-medium text-sm">⠿ ${a.name}</div>
+          <div class="text-xs opacity-60">${a.source} · ${a.days}d</div></div></div>`).join("")}</div></div>`;
+  };
+  return openingTabs() + openingHeader() +
+    `<div role="alert" class="alert alert-info alert-soft mb-3 text-sm">Drag a card to another column. While you drag, columns you can't drop into fade out.
+      Production would need a drag library such as SortableJS, which is outside the required stack, and it's awkward on phones.</div>
+    <div class="flex gap-3 overflow-x-auto pb-2">${STAGES.map(col).join("")}</div>`;
+}
+function startDrag(id) {
+  dragging = apps.find(a => a.id === id);
+  const ok = allowed(dragging);
+  document.querySelectorAll("[data-stage]").forEach(el => {
+    const s = el.dataset.stage;
+    if (s === dragging.stage) return;
+    el.classList.add(ok.includes(s) ? "drop-ok" : "drop-no");
+  });
+}
+function endDrag() { document.querySelectorAll("[data-stage]").forEach(el => el.classList.remove("drop-ok", "drop-no")); }
+function dropOn(stage) { if (dragging && stage !== dragging.stage) move(dragging.id, stage); dragging = null; }
+
+/* ---------------- Variant C: Table of all applications with filters ---------------- */
+function renderC() {
+  const f = tableFilters;
+  const rows = apps.filter(a =>
+    (f.opening === "all" || a.opening === +f.opening) &&
+    (f.stage === "all" || (f.stage === "active" ? ACTIVE.includes(a.stage) : a.stage === f.stage)) &&
+    (!f.q || a.name.toLowerCase().includes(f.q.toLowerCase())));
+  return `<div class="flex flex-wrap items-end justify-between gap-2 mb-3">
+      <div><h1 class="text-2xl font-bold">All applications</h1><p class="text-sm opacity-70">${rows.length} of ${apps.length} shown</p></div>
+      <button class="btn btn-sm btn-primary">+ Add application</button></div>
+    <div class="bg-base-100 rounded-box p-3 mb-3 flex flex-wrap gap-2">
+      <input class="input input-sm w-56" placeholder="Search candidate…" value="${f.q}" oninput="tableFilters.q=this.value; render(); refocus()" id="q">
+      <select class="select select-sm w-48" onchange="tableFilters.opening=this.value; render()">
+        <option value="all">All openings</option>${OPENINGS.map(o => `<option value="${o.id}" ${f.opening == o.id ? "selected" : ""}>${o.title}${o.status === "closed" ? " (closed)" : ""}</option>`).join("")}</select>
+      <select class="select select-sm w-44" onchange="tableFilters.stage=this.value; render()">
+        <option value="all">All stages</option><option value="active" ${f.stage === "active" ? "selected" : ""}>Active only</option>
+        ${STAGES.map(s => `<option ${f.stage === s ? "selected" : ""}>${s}</option>`).join("")}</select>
+    </div>
+    <div class="bg-base-100 rounded-box overflow-x-auto"><table class="table table-zebra table-sm">
+      <thead><tr><th>Candidate</th><th>Opening</th><th>Source</th><th>Stage</th><th>In stage</th><th>Move</th></tr></thead>
+      <tbody>${rows.map(a => { const o = opening(a.opening); return `<tr class="${a.id === lastMovedId ? "flash" : ""}">
+        <td><div class="font-medium">${a.name}</div><div class="text-xs opacity-60">${a.email}</div></td>
+        <td>${o.title} ${o.status === "closed" ? `<span class="badge badge-xs badge-neutral">closed</span>` : ""}</td>
+        <td>${a.source}</td><td>${stageBadge(a.stage)}</td><td>${a.days}d</td><td>${moveSelect(a)}</td></tr>`; }).join("")}</tbody></table></div>`;
+}
+function refocus() { const q = document.getElementById("q"); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
+
+/* Numbered 1–6 progress tracker with connecting line (shared by D and E) */
+function progressSteps(app, layout) {
+  const i = ACTIVE.indexOf(app.stage);
+  return `<ul class="steps ${layout} w-full text-xs">${ACTIVE.concat("Hired").map((s, k) => {
+    const reached = FINAL.includes(app.stage) ? app.history.includes(s) : k <= (app.stage === "Hired" ? 5 : i);
+    return `<li class="step ${reached ? (app.stage === "Rejected" ? "step-error" : "step-primary") : ""}">${s}</li>`; }).join("")}</ul>`;
+}
+
+/* ---------------- Variant D: List + detail with "Advance" buttons ---------------- */
+function renderD() {
+  const list = appsFor(currentOpening);
+  if (!list.find(a => a.id === selectedApp)) selectedApp = list[0]?.id;
+  const sel = apps.find(a => a.id === selectedApp);
+  const counts = `<ul class="steps steps-horizontal w-full text-xs mb-3">${ACTIVE.map(s =>
+    `<li class="step step-primary">${s}<br><span class="font-bold">${appsFor(currentOpening, s).length}</span></li>`).join("")}</ul>`;
+  const grouped = STAGES.map(s => {
+    const items = list.filter(a => a.stage === s);
+    if (!items.length) return "";
+    return `<li class="menu-title">${s} (${items.length})</li>${items.map(a =>
+      `<li><a class="${a.id === selectedApp ? "menu-active" : ""} ${a.id === lastMovedId ? "flash" : ""}" onclick="selectedApp=${a.id}; render()">
+        ${a.name}<span class="text-xs opacity-60 ml-auto">${a.days}d</span></a></li>`).join("")}`;
+  }).join("");
+
+  let detail = `<p class="opacity-60">Select an applicant.</p>`;
+  if (sel) {
+    const ok = allowed(sel);
+    const i = ACTIVE.indexOf(sel.stage);
+    const next = i >= 0 ? (i < 4 ? ACTIVE[i + 1] : "Hired") : null;
+    const back = i > 0 ? ACTIVE[i - 1] : null;
+    const btn = (to, label, cls) => ok.includes(to) ? `<button class="btn btn-sm ${cls}" onclick="move(${sel.id}, '${to}')">${label}</button>` : "";
+    const progress = progressSteps(sel, "steps-vertical lg:steps-horizontal my-3");
+    detail = `<div class="flex flex-wrap justify-between gap-2"><div>
+        <h2 class="text-xl font-bold">${sel.name}</h2><p class="text-sm opacity-70">${sel.email} · ${sel.source}</p></div>
+        <div>${stageBadge(sel.stage, "badge-lg")}</div></div>
+      ${progress}
+      <div class="flex flex-wrap gap-2 my-2">
+        ${next ? btn(next, `Advance to ${next} →`, "btn-primary") : ""}
+        ${back ? btn(back, `← Back to ${back}`, "btn-ghost") : ""}
+        ${FINAL.includes(sel.stage) && ok.length ? btn(ok[0], `Reopen to ${ok[0]}`, "btn-warning") : ""}
+        ${btn("Rejected", "Reject", "btn-error btn-outline")}
+        ${btn("Withdrawn", "Mark withdrawn", "btn-ghost")}
+        ${i >= 0 ? `<div class="dropdown"><div tabindex="0" role="button" class="btn btn-sm btn-ghost">Jump to…</div>
+          <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box shadow z-10 w-44">${ok.filter(s => ACTIVE.includes(s) && s !== next && s !== back)
+            .map(s => `<li><a onclick="move(${sel.id}, '${s}')">${s}</a></li>`).join("") || "<li class='disabled'><a>No other stages</a></li>"}</ul></div>` : ""}
+        ${sel.stage === "Hired" ? `<span class="text-sm opacity-60">Hired is final.</span>` : ""}
+      </div>
+      <div class="divider my-2">History</div>
+      <ul class="timeline timeline-vertical timeline-compact">${sel.history.map((s, k) =>
+        `<li>${k ? "<hr>" : ""}<div class="timeline-middle">●</div><div class="timeline-end timeline-box text-sm">${s}</div>${k < sel.history.length - 1 ? "<hr>" : ""}</li>`).join("")}</ul>`;
+  }
+  return openingTabs() + openingHeader() + `<div class="bg-base-100 rounded-box p-3 mb-3 overflow-x-auto">${counts}</div>
+    <div class="grid md:grid-cols-[280px_1fr] gap-3">
+      <ul class="menu bg-base-100 rounded-box w-full">${grouped}</ul>
+      <div class="bg-base-100 rounded-box p-4">${detail}</div></div>`;
+}
+
+/* ---------------- Variant E: C's table + D's named actions in a per-row menu ---------------- */
+function actionsMenu(a, openUp) {
+  const ok = allowed(a);
+  // Same button styles as variant D: primary Advance, ghost Back, warning Reopen, outlined error Reject, ghost Withdraw
+  const btn = (to, label, cls) => ok.includes(to)
+    ? `<button class="btn btn-sm ${cls} justify-start" onclick="move(${a.id}, '${to}')">${label}</button>` : "";
+  const label = t => `<div class="text-xs font-semibold opacity-60 mt-1">${t}</div>`;
+  const i = ACTIVE.indexOf(a.stage);
+  let items;
+  if (!ok.length) {
+    items = `<div class="text-sm opacity-70">Hired is final. No further moves.</div>`;
+  } else if (i < 0) {
+    items = btn(ok[0], `Reopen to ${ok[0]}`, "btn-warning");
+  } else {
+    const next = i < 4 ? ACTIVE[i + 1] : "Hired";
+    const back = i > 0 ? ACTIVE[i - 1] : null;
+    const jumps = ok.filter(s => ACTIVE.includes(s) && s !== next && s !== back);
+    items = btn(next, `Advance to ${next} →`, "btn-primary") +
+      (back ? btn(back, `← Back to ${back}`, "btn-ghost") : "") +
+      (jumps.length ? label("Jump to") + `<div class="flex flex-wrap gap-1">${jumps.map(s =>
+        `<button class="btn btn-xs btn-ghost" onclick="move(${a.id}, '${s}')">${s}</button>`).join("")}</div>` : "") +
+      label("Close out") +
+      `<div class="flex gap-1">${btn("Rejected", "Reject", "btn-error btn-outline")}${btn("Withdrawn", "Mark withdrawn", "btn-ghost")}</div>`;
+  }
+  const tracker = `<div class="flex justify-between items-center"><span class="font-semibold">${a.name}</span>${stageBadge(a.stage)}</div>
+    ${progressSteps(a, "steps-vertical sm:steps-horizontal")}
+    ${a.stage === "Rejected" || a.stage === "Withdrawn" ? `<div class="text-xs opacity-70">${a.stage} after ${a.history[a.history.length - 2]}</div>` : ""}
+    <div class="divider my-0"></div>`;
+  return `<details class="dropdown dropdown-end ${openUp ? "dropdown-top" : ""}">
+    <summary class="btn btn-xs">Actions ▾</summary>
+    <div class="dropdown-content bg-base-100 rounded-box shadow-lg z-20 w-[min(34rem,calc(100vw-2rem))] p-3 flex flex-col gap-2 text-left">${tracker}${items}</div></details>`;
+}
+function renderE() {
+  const f = tableFilters;
+  const rows = apps.filter(a =>
+    (f.opening === "all" || a.opening === +f.opening) &&
+    (f.stage === "all" || (f.stage === "active" ? ACTIVE.includes(a.stage) : a.stage === f.stage)) &&
+    (!f.q || a.name.toLowerCase().includes(f.q.toLowerCase())));
+  return `<div class="flex flex-wrap items-end justify-between gap-2 mb-3">
+      <div><h1 class="text-2xl font-bold">All applications</h1><p class="text-sm opacity-70">${rows.length} of ${apps.length} shown</p></div>
+      <button class="btn btn-sm btn-primary">+ Add application</button></div>
+    <div class="bg-base-100 rounded-box p-3 mb-3 flex flex-wrap gap-2">
+      <input class="input input-sm w-56" placeholder="Search candidate…" value="${f.q}" oninput="tableFilters.q=this.value; render(); refocus()" id="q">
+      <select class="select select-sm w-48" onchange="tableFilters.opening=this.value; render()">
+        <option value="all">All openings</option>${OPENINGS.map(o => `<option value="${o.id}" ${f.opening == o.id ? "selected" : ""}>${o.title}${o.status === "closed" ? " (closed)" : ""}</option>`).join("")}</select>
+      <select class="select select-sm w-44" onchange="tableFilters.stage=this.value; render()">
+        <option value="all">All stages</option><option value="active" ${f.stage === "active" ? "selected" : ""}>Active only</option>
+        ${STAGES.map(s => `<option ${f.stage === s ? "selected" : ""}>${s}</option>`).join("")}</select>
+    </div>
+    <div class="bg-base-100 rounded-box overflow-x-auto md:overflow-visible"><table class="table table-zebra table-sm">
+      <thead><tr><th>Candidate</th><th>Opening</th><th>Source</th><th>Stage</th><th>History</th><th>In stage</th><th class="text-right">Actions</th></tr></thead>
+      <tbody>${rows.map((a, k) => { const o = opening(a.opening); return `<tr class="${a.id === lastMovedId ? "flash" : ""}">
+        <td><div class="font-medium">${a.name}</div><div class="text-xs opacity-60">${a.email}</div></td>
+        <td>${o.title} ${o.status === "closed" ? `<span class="badge badge-xs badge-neutral">closed</span>` : ""}</td>
+        <td>${a.source}</td><td>${stageBadge(a.stage)}</td>
+        <td class="text-xs opacity-60">${a.history.join(" → ")}</td><td>${a.days}d</td>
+        <td class="text-right">${actionsMenu(a, k >= rows.length - 3 && rows.length > 5)}</td></tr>`; }).join("")}</tbody></table></div>`;
+}
+
+/* ---------------- Variant switcher ---------------- */
+const VARIANTS = [
+  { key: "A", name: "Board + card dropdown", render: renderA },
+  { key: "B", name: "Board + drag-and-drop", render: renderB },
+  { key: "C", name: "Table of all applications", render: renderC },
+  { key: "D", name: "List + detail, Advance buttons", render: renderD },
+  { key: "E", name: "Table + named Actions menu", render: renderE },
+];
+let v = 0;
+try { v = Math.min(VARIANTS.length - 1, Math.max(0, +localStorage.getItem("pipeline-variant") || 0)); } catch (e) {}
+function setVariant(n) {
+  v = (n + VARIANTS.length) % VARIANTS.length;
+  try { localStorage.setItem("pipeline-variant", v); } catch (e) {}
+  lastMovedId = null;
+  render();
+}
+function render() {
+  document.getElementById("vlabel").textContent = `${VARIANTS[v].key} (${v + 1}/${VARIANTS.length}) · ${VARIANTS[v].name}`;
+  document.getElementById("view").innerHTML = VARIANTS[v].render();
+}
+document.getElementById("prev").onclick = () => setVariant(v - 1);
+document.getElementById("next").onclick = () => setVariant(v + 1);
+document.addEventListener("keydown", e => {
+  if (["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
+  if (e.key === "ArrowLeft") setVariant(v - 1);
+  if (e.key === "ArrowRight") setVariant(v + 1);
+});
+render();
+</script>
+</body>
+</html>
