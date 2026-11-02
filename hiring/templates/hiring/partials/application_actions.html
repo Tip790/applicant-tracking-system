@@ -16,7 +16,9 @@ Each button submits its stage to the move view, which swaps in the new row.
   {% include "hiring/partials/progress_tracker.html" %}
   <div class="divider my-1"></div>
 
-  {% if options %}
+  {% if application.candidate.archived %}
+    <p class="text-sm opacity-70">{{ application.candidate }} is archived. Unarchive the candidate to move this application.</p>
+  {% elif options %}
     <form hx-post="{% url 'hiring:application_move' application.pk %}"
           hx-target="#application-{{ application.pk }}" hx-swap="outerHTML"
           class="flex flex-col gap-2">

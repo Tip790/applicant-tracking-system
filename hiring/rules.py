@@ -41,11 +41,12 @@ def get_or_create_skill(name):
 
 def application_refusal_reason(candidate, opening):
     """Return why this candidate can't apply to this opening, or None if they can."""
+    if candidate.archived:
+        return archived_reason(candidate)
     if opening.is_closed:
         return f"{opening} is closed and isn't accepting new applications."
     if Application.objects.filter(candidate=candidate, opening=opening).exists():
         return f"{candidate} has already applied to {opening}."
-    # Phase 6 adds: archived candidates can't apply.
     return None
 
 
@@ -57,8 +58,8 @@ def openings_candidate_can_apply_to(candidate):
 
 
 def candidates_who_can_apply_to(opening):
-    """Candidates who haven't applied to this opening yet (the candidate picker)."""
-    return Candidate.objects.exclude(applications__opening=opening)
+    """Non-archived candidates who haven't applied to this opening yet (the candidate picker)."""
+    return Candidate.objects.filter(archived=False).exclude(applications__opening=opening)
 
 
 def create_application(candidate, opening, user):
@@ -107,7 +108,10 @@ def move_refusal_reason(application, to_stage):
     - From an active stage: any other active stage, Rejected or Withdrawn.
     - Hired only from Offer, and Hired is final.
     - Rejected or Withdrawn: only "reopen" back to the stage held just before.
+    - Nothing at all while the candidate is archived (archived records are read-only).
     """
+    if application.candidate.archived:
+        return f"{application.candidate} is archived, so their applications can't be moved."
     current = application.stage
     if current == Stage.HIRED:
         return "Hired is final. This application can't be moved."
@@ -127,7 +131,6 @@ def move_refusal_reason(application, to_stage):
         return f"This application is already in {application.get_stage_display()}."
     if to_stage not in Stage.values:
         return "That isn't a hiring stage."
-    # Phase 6 adds: archived candidates' applications can't be moved.
     return None
 
 
@@ -158,13 +161,15 @@ def move_options(application):
         for stage in ACTIVE_STAGES
         if stage not in (application.stage, advance, back) and allowed(stage)
     ]
-    return {
+    options = {
         "advance": advance,
         "back": back,
         "jumps": jumps,
         "reject": allowed(Stage.REJECTED),
         "withdraw": allowed(Stage.WITHDRAWN),
     }
+    # e.g. an archived candidate: every move is refused, so offer no buttons at all.
+    return options if any(options.values()) else None
 
 
 def progress_steps(application):
@@ -203,6 +208,67 @@ def move_application(application, to_stage, user):
             changed_by=user,
         )
     return application
+
+
+# --- Archiving and deleting candidates --------------------------------------
+
+
+def archived_reason(candidate):
+    """Archived candidates are read-only. Return why this one can't be changed, or None."""
+    if candidate.archived:
+        return f"{candidate} is archived. Unarchive the candidate to make changes."
+    return None
+
+
+def archive_refusal_reason(candidate):
+    """Return why this candidate can't be archived, or None if they can.
+
+    Archiving is blocked while any application is still active; the reason lists them.
+    """
+    blocking = candidate.applications.filter(stage__in=ACTIVE_STAGES).select_related("opening")
+    if not blocking:
+        return None
+    listed = ", ".join(f"{app.opening} ({app.get_stage_display()})" for app in blocking)
+    return f"{candidate} can't be archived while these applications are active: {listed}."
+
+
+def archive_candidate(candidate):
+    """Archive a candidate. Raises RuleViolation if they have an active application."""
+    reason = archive_refusal_reason(candidate)
+    if reason:
+        raise RuleViolation(reason)
+    candidate.archived = True
+    candidate.save(update_fields=["archived", "updated_at"])
+    return candidate
+
+
+def unarchive_candidate(candidate):
+    """Bring an archived candidate back, so they can be edited and moved again."""
+    candidate.archived = False
+    candidate.save(update_fields=["archived", "updated_at"])
+    return candidate
+
+
+def delete_refusal_reason(candidate):
+    """Return why this candidate can't be deleted, or None if they can.
+
+    Only candidates with no applications can be deleted from the app, so hiring
+    history is never destroyed. Superusers can still delete anything in admin.
+    """
+    if candidate.applications.exists():
+        return (
+            f"{candidate} can't be deleted because they have applications. "
+            "Archive the candidate instead to keep their hiring history."
+        )
+    return None
+
+
+def delete_candidate(candidate):
+    """Delete a candidate. Raises RuleViolation if they have any application."""
+    reason = delete_refusal_reason(candidate)
+    if reason:
+        raise RuleViolation(reason)
+    candidate.delete()
 
 
 def count_active_applications(opening):

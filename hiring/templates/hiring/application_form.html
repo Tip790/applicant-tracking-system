@@ -31,7 +31,7 @@
       {% if not field.field.queryset.exists %}
         <p class="text-sm opacity-70">
           {% if candidate %}There are no open openings this candidate hasn't already applied to.
-          {% else %}Every candidate has already applied to this opening.{% endif %}
+          {% else %}Every candidate who isn't archived has already applied to this opening.{% endif %}
         </p>
       {% endif %}
     {% endfor %}

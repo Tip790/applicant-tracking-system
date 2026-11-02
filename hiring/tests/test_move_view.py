@@ -1,6 +1,9 @@
+from html import unescape
+
 import pytest
 from django.urls import reverse
 
+from hiring import rules
 from hiring.models import JobOpening, Stage
 
 
@@ -207,6 +210,26 @@ def test_tampered_reopen_to_the_wrong_stage_returns_an_error_alert(staff_client,
     assert "Rejected applications can only be reopened to Interview." in response.content.decode()
     application.refresh_from_db()
     assert application.stage == Stage.REJECTED
+
+
+@pytest.mark.django_db
+def test_moving_an_archived_candidates_application_is_refused_with_an_alert(
+    staff_client, staff_user, application
+):
+    rules.move_application(application, Stage.REJECTED, staff_user)
+    rules.archive_candidate(application.candidate)
+
+    # Reopen would be legal if Ann weren't archived; this POST was hand-made.
+    response = move(staff_client, application, Stage.APPLIED)
+
+    assert response.status_code == 422
+    assert response["HX-Retarget"] == "#move-alert"
+    html = unescape(response.content.decode())  # turn &#x27; back into '
+    assert "alert-error" in html
+    assert "Ann Lee is archived, so their applications can't be moved." in html
+    application.refresh_from_db()
+    assert application.stage == Stage.REJECTED
+    assert application.stage_changes.count() == 2  # Applied, then Rejected; nothing new
 
 
 @pytest.mark.django_db

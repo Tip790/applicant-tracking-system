@@ -28,6 +28,58 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-02 — Phase 6: archive, unarchive and delete candidates
+
+### Prompts
+1. `/implement @prd/applicant-tracking-system.md  @plans/applicant-tracking-system.md  implement Phase 6`
+2. `approved, go ahead`
+3. `approved, go ahead`
+4. `continue`
+5. `approved, go ahead`
+6. `continue`
+7. `contine`
+8. `continue!`
+9. `manual verification passes, finish the process`
+
+### Summary
+- **Outcome:** Phase 6 was built on top of Phase 5:
+  - `hiring/rules.py` gained:
+    - `archived_reason`, the one "archived = read-only" message.
+    - `archive_refusal_reason` / `archive_candidate`: archiving is refused while any application is active, and the message lists them as "Opening (Stage)".
+    - `unarchive_candidate`.
+    - `delete_refusal_reason` / `delete_candidate`: deleting is refused once the candidate has any application, and the message suggests archiving.
+  - `move_refusal_reason` now refuses every move on an archived candidate's applications. `application_refusal_reason` refuses archived candidates. `candidates_who_can_apply_to` excludes them. `move_options` returns `None` when no button would be offered.
+  - POST-only `candidate_archive`, `candidate_unarchive` and `candidate_delete` views. A refusal shows as an error message on the candidate page, and a successful delete goes to the candidate list. The edit page and the "record application" page (started from the candidate) redirect an archived candidate back to their page with the read-only message.
+  - Templates:
+    - A new `archived_badge.html` partial on the candidate list, the candidate page and the table rows.
+    - The candidate page shows Unarchive, or Edit and Archive, plus Delete only when the candidate has no applications. Delete asks first through `hx-boost` + `hx-confirm`. An archived candidate's page has a read-only alert and no "Record application" button.
+    - The Actions dropdown shows an "is archived" note instead of move buttons.
+    - The candidate list has a "Show archived" checkbox.
+  - 163 tests pass. Three behaviors were built test-first, each through an approved RED → GREEN cycle:
+    - Archiving is refused while an application is active, and the reason lists the blocking applications.
+    - A tampered move on an archived candidate's application returns the 422 alert and changes nothing.
+    - Deleting a candidate with any application is refused with an archive suggestion, while one with no applications is deleted.
+  - Ordinary tests cover:
+    - The archive/unarchive/delete views and their messages.
+    - Refusing edits, refusing applications (in the rules and through a tampered form POST), and the record-page redirect.
+    - The picker exclusion, the candidate page buttons and the dropdown note.
+    - The "Show archived" toggle, alone and with search.
+    - Login on the new POST actions, plus a new test that every POST action refuses GET.
+  - Ruff check and format are clean, there are no missing migrations, and the CSS build contains the new badge, checkbox and outline-button styles. The user confirmed manual verification in the browser.
+- **Deviations:**
+  - The user approved all three TDD behaviors and all three tests without changes. Prompt 7 ("contine") was a typo; Claude took it as approval of the third test and said so.
+  - Claude made a few choices without asking:
+    - The wording of every refusal and archived message.
+    - Showing Delete only for candidates with no applications.
+    - A browser confirm on Delete (through `hx-boost` + `hx-confirm`, since HTMX is the only JavaScript) but none on Archive, because unarchiving undoes it.
+    - An Archived badge in the applications table rows too.
+    - Checking "archived" before every other move rule.
+- **Sideways:**
+  - All three RED runs failed on assertions. For behaviors 1 and 3, Claude first wrote stubs (an `archive_candidate` and a `delete_candidate` that skipped the check). Behavior 2 needed no stub.
+  - Behavior 2's first GREEN run still failed because Django HTML-escapes the apostrophe in "can't". Claude made a mechanical repair (unescape the response before checking the text) and noted it in one line. The assertion itself didn't change.
+  - Claude's first draft of the archive view tests had inline `JobOpening` imports and an unused `opening` fixture. Both were cleaned up before the first run.
+  - Claude never opened the pages in a browser, so the Delete confirm dialog was only checked during the user's manual verification.
+
 ## 2026-11-02 — Phase 5: progress tracker and reopen
 
 ### Prompts

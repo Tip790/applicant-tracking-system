@@ -8,11 +8,16 @@
   <a href="{% url 'hiring:candidate_create' %}" class="btn btn-primary btn-sm">+ New candidate</a>
 </div>
 
-<form method="get" class="flex gap-2 mb-4">
+<form method="get" class="flex flex-wrap items-center gap-2 mb-4">
   <input type="search" name="q" value="{{ query }}" placeholder="Search by name or email"
          class="input w-full max-w-md">
+  <label class="flex items-center gap-2 text-sm">
+    <input type="checkbox" name="show_archived" value="1" class="checkbox checkbox-sm"
+           {% if show_archived %}checked{% endif %}>
+    Show archived
+  </label>
   <button type="submit" class="btn">Search</button>
-  {% if query %}<a href="{% url 'hiring:candidate_list' %}" class="btn btn-ghost">Clear</a>{% endif %}
+  {% if query or show_archived %}<a href="{% url 'hiring:candidate_list' %}" class="btn btn-ghost">Clear</a>{% endif %}
 </form>
 
 <div class="card bg-base-100 shadow overflow-x-auto">
@@ -23,7 +28,10 @@
     <tbody>
       {% for candidate in candidates %}
         <tr class="hover:bg-base-200">
-          <td><a href="{{ candidate.get_absolute_url }}" class="link link-hover font-medium">{{ candidate }}</a></td>
+          <td>
+            <a href="{{ candidate.get_absolute_url }}" class="link link-hover font-medium">{{ candidate }}</a>
+            {% include "hiring/partials/archived_badge.html" %}
+          </td>
           <td>{{ candidate.email }}</td>
           <td>{{ candidate.phone|default:"—" }}</td>
           <td>{{ candidate.get_source_display }}</td>

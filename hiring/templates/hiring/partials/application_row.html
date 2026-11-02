@@ -2,6 +2,7 @@
 <tr id="application-{{ application.pk }}" class="hover:bg-base-200 align-top">
   <td>
     <a href="{{ application.candidate.get_absolute_url }}" class="link link-hover font-medium">{{ application.candidate }}</a>
+    {% include "hiring/partials/archived_badge.html" with candidate=application.candidate %}
     <div class="text-xs opacity-70">{{ application.candidate.email }}</div>
   </td>
   <td>

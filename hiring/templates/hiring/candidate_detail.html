@@ -6,10 +6,39 @@
 <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
   <div>
     <a href="{% url 'hiring:candidate_list' %}" class="link link-hover text-sm">← Candidates</a>
-    <h1 class="text-2xl font-bold">{{ candidate }}</h1>
+    <h1 class="text-2xl font-bold flex items-center gap-2">
+      {{ candidate }} {% include "hiring/partials/archived_badge.html" %}
+    </h1>
   </div>
-  <a href="{% url 'hiring:candidate_update' candidate.pk %}" class="btn btn-sm">Edit</a>
+  <div class="flex flex-wrap gap-2">
+    {% if candidate.archived %}
+      <form method="post" action="{% url 'hiring:candidate_unarchive' candidate.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-primary">Unarchive</button>
+      </form>
+    {% else %}
+      <a href="{% url 'hiring:candidate_update' candidate.pk %}" class="btn btn-sm">Edit</a>
+      <form method="post" action="{% url 'hiring:candidate_archive' candidate.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-outline">Archive</button>
+      </form>
+    {% endif %}
+    {% if not applications %}
+      {# hx-boost sends the form through HTMX so hx-confirm can ask first. #}
+      <form method="post" action="{% url 'hiring:candidate_delete' candidate.pk %}"
+            hx-boost="true" hx-confirm="Delete {{ candidate }}? This can't be undone.">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-outline btn-error">Delete</button>
+      </form>
+    {% endif %}
+  </div>
 </div>
+
+{% if candidate.archived %}
+  <div role="alert" class="alert alert-info mb-4">
+    <span>This candidate is archived and read-only. Unarchive them to edit their details, record applications or move their applications.</span>
+  </div>
+{% endif %}
 
 <div class="card bg-base-100 shadow mb-6">
   <div class="card-body">
@@ -25,7 +54,9 @@
 
 <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
   <h2 class="text-xl font-bold">Applications</h2>
-  <a href="{% url 'hiring:application_create' %}?candidate={{ candidate.pk }}" class="btn btn-primary btn-sm">+ Record application</a>
+  {% if not candidate.archived %}
+    <a href="{% url 'hiring:application_create' %}?candidate={{ candidate.pk }}" class="btn btn-primary btn-sm">+ Record application</a>
+  {% endif %}
 </div>
 <div class="card bg-base-100 shadow overflow-x-auto">
   <table class="table">

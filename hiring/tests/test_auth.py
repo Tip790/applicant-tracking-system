@@ -29,6 +29,9 @@ def app_post_action_urls(opening, application):
         reverse("hiring:opening_close", args=[opening.pk]),
         reverse("hiring:opening_reopen", args=[opening.pk]),
         reverse("hiring:application_move", args=[application.pk]),
+        reverse("hiring:candidate_archive", args=[application.candidate.pk]),
+        reverse("hiring:candidate_unarchive", args=[application.candidate.pk]),
+        reverse("hiring:candidate_delete", args=[application.candidate.pk]),
     ]
 
 
@@ -60,6 +63,17 @@ def test_anonymous_post_actions_are_sent_to_login_and_change_nothing(client, ope
     assert opening.status == opening.Status.OPEN
     assert application.stage == "applied"
     assert application.stage_changes.count() == 1
+    application.candidate.refresh_from_db()  # still exists and isn't archived
+    assert application.candidate.archived is False
+
+
+@pytest.mark.django_db
+def test_post_actions_refuse_get(staff_client, opening, application):
+    # The close URL is left out: its GET shows a confirmation page instead.
+    for url in app_post_action_urls(opening, application):
+        if url == reverse("hiring:opening_close", args=[opening.pk]):
+            continue
+        assert staff_client.get(url).status_code == 405, url
 
 
 @pytest.mark.django_db

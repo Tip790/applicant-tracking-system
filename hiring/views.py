@@ -68,6 +68,9 @@ def application_create(request):
     candidate = opening = None
     if request.GET.get("candidate"):
         candidate = get_object_or_404(Candidate, pk=request.GET["candidate"])
+        if rules.archived_reason(candidate):
+            messages.error(request, rules.archived_reason(candidate))
+            return redirect(candidate)
     elif request.GET.get("opening"):
         opening = get_object_or_404(JobOpening, pk=request.GET["opening"])
     else:
@@ -118,11 +121,18 @@ def application_move(request, pk):
 
 
 class CandidateListView(ListView):
+    """Candidates, with search. Archived candidates are hidden unless ?show_archived=1."""
+
     model = Candidate
     context_object_name = "candidates"
 
+    def show_archived(self):
+        return self.request.GET.get("show_archived") == "1"
+
     def get_queryset(self):
         candidates = super().get_queryset()
+        if not self.show_archived():
+            candidates = candidates.filter(archived=False)
         query = self.request.GET.get("q", "").strip()
         if query:
             candidates = candidates.filter(
@@ -135,6 +145,7 @@ class CandidateListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["query"] = self.request.GET.get("q", "").strip()
+        context["show_archived"] = self.show_archived()
         return context
 
 
@@ -160,9 +171,52 @@ class CandidateUpdateView(UpdateView):
     model = Candidate
     form_class = CandidateForm
 
+    def dispatch(self, request, *args, **kwargs):
+        # Archived candidates are read-only: send GET and POST back to their page.
+        candidate = get_object_or_404(Candidate, pk=kwargs["pk"])
+        if rules.archived_reason(candidate):
+            messages.error(request, rules.archived_reason(candidate))
+            return redirect(candidate)
+        return super().dispatch(request, *args, **kwargs)
+
     def form_valid(self, form):
         messages.success(self.request, "Candidate updated.")
         return super().form_valid(form)
+
+
+@require_POST
+def candidate_archive(request, pk):
+    """Archive a candidate, unless an application is still active (the message lists them)."""
+    candidate = get_object_or_404(Candidate, pk=pk)
+    try:
+        rules.archive_candidate(candidate)
+    except rules.RuleViolation as error:
+        messages.error(request, str(error))
+    else:
+        messages.success(request, "Candidate archived. Their record is now read-only.")
+    return redirect(candidate)
+
+
+@require_POST
+def candidate_unarchive(request, pk):
+    """Bring an archived candidate back so they can be edited and moved again."""
+    candidate = get_object_or_404(Candidate, pk=pk)
+    rules.unarchive_candidate(candidate)
+    messages.success(request, "Candidate unarchived.")
+    return redirect(candidate)
+
+
+@require_POST
+def candidate_delete(request, pk):
+    """Delete a candidate who has no applications; otherwise suggest archiving."""
+    candidate = get_object_or_404(Candidate, pk=pk)
+    try:
+        rules.delete_candidate(candidate)
+    except rules.RuleViolation as error:
+        messages.error(request, str(error))
+        return redirect(candidate)
+    messages.success(request, f"{candidate} was deleted.")
+    return redirect("hiring:candidate_list")
 
 
 class JobOpeningListView(ListView):
